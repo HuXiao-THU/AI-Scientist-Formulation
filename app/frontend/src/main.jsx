@@ -24,7 +24,7 @@ function App() {
   const refreshRuns = React.useCallback(async () => {
     try {
       const data = await listRuns();
-      setRuns(data.items ?? []);
+      setRuns(Array.isArray(data) ? data : data.items ?? []);
     } catch (err) {
       setError(String(err));
     }

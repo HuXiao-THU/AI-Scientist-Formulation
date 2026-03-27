@@ -5,12 +5,22 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from .domain.ccts import compute_context_budget, is_feasible
 from .schemas import CreateRunRequest, RunDetailResponse, RunListItem, StepResponse
 from .store import STORE
 
 app = FastAPI(title="CCTS Phase 1 MVP API", version="0.1.0")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

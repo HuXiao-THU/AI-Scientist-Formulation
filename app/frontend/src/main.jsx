@@ -127,8 +127,8 @@ function App() {
               {runs.map((run) => {
                 const ratio = depthRatio(run.current_depth, run.predicted_max_depth);
                 return (
-                  <tr key={run.run_id}>
-                    <td>{run.run_id.slice(0, 8)}</td>
+                  <tr key={run.id}>
+                    <td>{run.id.slice(0, 8)}</td>
                     <td>
                       <span style={{ color: "white", background: statusColor(run.status), borderRadius: 999, padding: "2px 8px", fontSize: 12 }}>
                         {run.status}
@@ -143,7 +143,7 @@ function App() {
                         type="button"
                         className="btn-secondary"
                         disabled={busy || run.status === "completed" || run.status === "failed"}
-                        onClick={() => onAdvance(run.run_id)}
+                        onClick={() => onAdvance(run.id)}
                       >
                         Advance
                       </button>

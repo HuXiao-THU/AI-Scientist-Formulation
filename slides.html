@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Context-Constrained AI Research in Transportation Engineering</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+<style>
+  :root {
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --accent-dark: #1e40af;
+    --gray-600: #4b5563;
+    --gray-400: #9ca3af;
+    --red: #dc2626;
+    --green: #16a34a;
+    --orange: #ea580c;
+  }
+  .reveal { font-family: "PingFang SC", "Microsoft YaHei", "Inter", "Helvetica Neue", Arial, sans-serif; }
+  .reveal h1, .reveal h2, .reveal h3 { color: var(--accent-dark); font-weight: 700; text-transform: none; letter-spacing: 0; }
+  .reveal h1 { font-size: 1.7em; }
+  .reveal h2 { font-size: 1.25em; border-bottom: 3px solid var(--accent); padding-bottom: 0.15em; display: inline-block; margin-bottom: 0.3em; }
+  .reveal h3 { font-size: 0.85em; color: var(--accent); margin: 0 0 4px 0; }
+  .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.58em; line-height: 1.5; color: #1f2937; }
+  .reveal .small { font-size: 0.48em; color: var(--gray-600); }
+  .reveal ul { list-style: none; padding-left: 0; margin: 0; }
+  .reveal ul li { position: relative; padding-left: 1.2em; margin-bottom: 0.25em; }
+  .reveal ul li::before { content: "▸"; color: var(--accent); position: absolute; left: 0; font-weight: bold; }
+  .reveal .slides section { text-align: left; padding: 18px 48px; }
+
+  .reveal table { width: 100%; border-collapse: collapse; font-size: 0.52em; margin: 0.3em 0; }
+  .reveal table th { background: var(--accent); color: white; padding: 5px 10px; text-align: left; font-weight: 600; }
+  .reveal table td { padding: 5px 10px; border-bottom: 1px solid #e5e7eb; }
+  .reveal table tr:nth-child(even) td { background: #f9fafb; }
+
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 16px; margin: 6px 0; }
+  .card-accent { border-left: 4px solid var(--accent); }
+  .card-red { border-left: 4px solid var(--red); }
+  .card-green { border-left: 4px solid var(--green); }
+  .card-orange { border-left: 4px solid var(--orange); }
+
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.46em; font-weight: 600; margin-right: 4px; }
+  .tag-blue { background: var(--accent-light); color: var(--accent-dark); }
+  .tag-red { background: #fee2e2; color: var(--red); }
+  .tag-green { background: #dcfce7; color: var(--green); }
+  .tag-orange { background: #fff7ed; color: var(--orange); }
+
+  .formula-box { background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%); border: 2px solid var(--accent); border-radius: 10px; padding: 12px 20px; margin: 10px 0; text-align: center; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  .highlight { color: var(--accent); font-weight: 700; }
+  .highlight-red { color: var(--red); font-weight: 700; }
+  .highlight-green { color: var(--green); font-weight: 700; }
+
+  .title-slide h1 { font-size: 1.5em; line-height: 1.3; margin-bottom: 0.3em; }
+  .title-slide .subtitle { font-size: 0.7em; color: var(--gray-600); margin-bottom: 1.2em; }
+  .title-slide .author { font-size: 0.6em; color: var(--accent-dark); }
+
+  .reveal .progress { color: var(--accent); height: 4px; }
+  .reveal .controls { color: var(--accent); }
+
+  .bar-chart { display: flex; align-items: flex-end; gap: 14px; justify-content: center; height: 150px; margin: 10px 0; }
+  .bar-item { display: flex; flex-direction: column; align-items: center; }
+  .bar { width: 55px; border-radius: 5px 5px 0 0; }
+  .bar-label { font-size: 0.4em; margin-top: 4px; font-weight: 600; color: var(--gray-600); text-align: center; }
+  .bar-value { font-size: 0.38em; margin-bottom: 3px; font-weight: 700; }
+
+  .timeline { display: flex; align-items: center; gap: 0; margin: 15px 0; }
+  .timeline-item { flex: 1; text-align: center; position: relative; }
+  .timeline-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); margin: 0 auto 6px; position: relative; z-index: 2; }
+  .timeline-item:not(:last-child)::after { content: ""; position: absolute; top: 9px; left: 55%; width: 90%; height: 3px; background: var(--accent-light); z-index: 1; }
+  .timeline-label { font-size: 0.42em; font-weight: 600; color: var(--accent-dark); }
+  .timeline-desc { font-size: 0.38em; color: var(--gray-600); margin-top: 2px; }
+
+  .icon-num { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: white; font-size: 0.5em; font-weight: 700; align-items: center; justify-content: center; margin-right: 6px; vertical-align: middle; }
+
+  .context-bar { height: 30px; border-radius: 7px; display: flex; overflow: hidden; margin: 6px 0; font-size: 0.38em; font-weight: 600; color: white; }
+  .context-bar > div { display: flex; align-items: center; justify-content: center; padding: 0 4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ==================== 标题页 ==================== -->
+<section class="title-slide" data-background-gradient="linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f0f9ff 100%)">
+  <div style="text-align:center; padding-top:50px;">
+    <h1 style="text-align:center;">Context-Constrained AI Research<br>in Transportation Engineering</h1>
+    <p class="subtitle">LLM 上下文窗口约束下 AI 自主交通科研的可解性边界建模</p>
+    <div style="width:60px; height:3px; background:var(--accent); margin:18px auto;"></div>
+    <p class="author">组会汇报</p>
+    <p class="small" style="margin-top:5px;">2026 年 3 月</p>
+  </div>
+</section>
+
+<!-- ==================== 目录 ==================== -->
+<section>
+  <h2>汇报提纲</h2>
+  <div style="margin-top: 16px;">
+    <p><span class="icon-num">1</span> 研究背景与动机</p>
+    <p><span class="icon-num">2</span> 研究问题与假设</p>
+    <p><span class="icon-num">3</span> 形式化模型：CCTS 框架</p>
+    <p><span class="icon-num">4</span> 案例分析：交通预测</p>
+    <p><span class="icon-num">5</span> 实验设计</p>
+    <p><span class="icon-num">6</span> 预期贡献与未来方向</p>
+  </div>
+</section>
+
+<!-- ==================== 背景 ==================== -->
+<section>
+  <h2>研究背景</h2>
+  <div class="card card-accent" style="margin-top:10px;">
+    <h3>AI Scientist 范式</h3>
+    <p style="margin:0;">基于 LLM 的 Agent（如 The AI Scientist、MLAgentBench）已能自主开展科学研究：生成想法、运行实验、撰写论文。</p>
+  </div>
+  <div class="card card-red">
+    <h3>核心瓶颈</h3>
+    <p style="margin:0;">在处理复杂研究任务时，这些 Agent 频繁遇到 <span class="highlight-red">上下文窗口限制</span>——LLM 单次能处理的最大 token 数。</p>
+  </div>
+  <div class="card card-orange">
+    <h3>为什么上下文对科研很重要？</h3>
+    <p style="margin:0;">科研 = 迭代试错。随着实验积累，历史信息不断<span class="highlight">压缩</span>可用于当前任务的上下文空间。</p>
+  </div>
+</section>
+
+<!-- ==================== 核心问题图示 ==================== -->
+<section>
+  <h2>核心问题：上下文空间被逐步压缩</h2>
+  <p class="small" style="margin-bottom:6px;">随着研究推进（树深度增加），可用工作上下文持续缩小：</p>
+  <div>
+    <p class="small" style="font-weight:600; margin-bottom:4px;">Depth = 0（初始）</p>
+    <div class="context-bar">
+      <div style="width:15%; background:#94a3b8;">c_sys</div>
+      <div style="width:10%; background:#64748b;">c_prob</div>
+      <div style="width:75%; background:var(--accent);">Available Working Context (c_work)</div>
+    </div>
+    <p class="small" style="font-weight:600; margin-bottom:4px; margin-top:8px;">Depth = 5</p>
+    <div class="context-bar">
+      <div style="width:15%; background:#94a3b8;">c_sys</div>
+      <div style="width:10%; background:#64748b;">c_prob</div>
+      <div style="width:20%; background:#f59e0b;">c_hist</div>
+      <div style="width:55%; background:var(--accent);">c_work</div>
+    </div>
+    <p class="small" style="font-weight:600; margin-bottom:4px; margin-top:8px;">Depth = 15</p>
+    <div class="context-bar">
+      <div style="width:15%; background:#94a3b8;">c_sys</div>
+      <div style="width:10%; background:#64748b;">c_prob</div>
+      <div style="width:50%; background:#f59e0b;">c_hist (growing)</div>
+      <div style="width:25%; background:var(--accent);">c_work</div>
+    </div>
+    <p class="small" style="font-weight:600; margin-bottom:4px; margin-top:8px;">Depth = d*（极限）</p>
+    <div class="context-bar">
+      <div style="width:15%; background:#94a3b8;">c_sys</div>
+      <div style="width:10%; background:#64748b;">c_prob</div>
+      <div style="width:55%; background:#f59e0b;">c_hist (saturated)</div>
+      <div style="width:20%; background:var(--red); font-style:italic;">c_work &lt; D</div>
+    </div>
+  </div>
+  <div class="card card-red" style="margin-top:8px;">
+    <p style="margin:0;">当 <strong>c_work &lt; D（任务需求）</strong>时，Agent <span class="highlight-red">无法完成</span>下一次实验。</p>
+  </div>
+</section>
+
+<!-- ==================== 研究范围 ==================== -->
+<section>
+  <h2>研究范围</h2>
+  <p class="small" style="margin-bottom:8px;">完整的 AI 科研流程分为三个阶段，本研究聚焦第二阶段：</p>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-dot" style="background:var(--gray-400);"></div>
+      <div class="timeline-label" style="color:var(--gray-400);">阶段一</div>
+      <div class="timeline-desc">Idea 生成</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot" style="background:var(--accent); width:24px; height:24px; margin-top:-3px; box-shadow: 0 0 0 4px var(--accent-light);"></div>
+      <div class="timeline-label">阶段二</div>
+      <div class="timeline-desc"><strong>自主实验</strong></div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot" style="background:var(--gray-400);"></div>
+      <div class="timeline-label" style="color:var(--gray-400);">阶段三</div>
+      <div class="timeline-desc">论文撰写</div>
+    </div>
+  </div>
+  <div class="card card-accent" style="margin-top:16px;">
+    <p style="margin:0;"><strong>核心问题：</strong>给定上下文窗口 \(C\)，AI Agent 能否通过迭代实验完成给定的交通工程研究任务？</p>
+  </div>
+  <p class="small" style="margin-top:8px;">不评估创新性和写作质量——仅关注<span class="highlight">任务完成能力</span>。</p>
+</section>
+
+<!-- ==================== 研究问题与假设 ==================== -->
+<section>
+  <h2>研究问题与假设</h2>
+  <div class="formula-box" style="margin-top:10px;">
+    <p style="font-size:0.62em; font-weight:600; color:var(--accent-dark); margin:0;">
+      给定 LLM 上下文窗口 \(C\)，哪些交通工程研究问题可以被 AI Agent 自主解决？<br>其可解性边界能否被<em>理论预测</em>？
+    </p>
+  </div>
+  <div style="margin-top:12px;">
+    <div class="card card-accent" style="margin-bottom:6px;">
+      <p style="margin:0;"><span class="tag tag-blue">H1 — 深度上界</span>
+      Agent 能执行的连续实验次数存在可计算的上界 \(d^*\)，且接近 \(d^*\) 时性能显著下降。</p>
+    </div>
+    <div class="card card-green" style="margin-bottom:6px;">
+      <p style="margin:0;"><span class="tag tag-green">H2 — 问题可分性</span>
+      不同问题类型有不同的最小上下文需求 \(C_{\min}\)，据此可将问题分为"可解"与"不可解"。</p>
+    </div>
+    <div class="card card-orange">
+      <p style="margin:0;"><span class="tag tag-orange">H3 — 压缩差距</span>
+      理想压缩与实际 LLM 摘要的差距（压缩比 \(\alpha\)）是限制实际研究深度的主导因素。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CCTS 模型总览 ==================== -->
+<section>
+  <h2>CCTS：上下文约束树搜索</h2>
+  <div class="grid-2" style="margin-top:10px;">
+    <div>
+      <h3>Research Tree \(\mathcal{T} = (V, E, r)\)</h3>
+      <svg viewBox="0 0 340 230" style="width:100%; max-width:320px;">
+        <defs>
+          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/>
+          </marker>
+        </defs>
+        <circle cx="170" cy="28" r="16" fill="#2563eb"/>
+        <text x="170" y="33" text-anchor="middle" fill="white" font-size="11" font-weight="bold">r</text>
+        <line x1="159" y1="42" x2="100" y2="78" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="181" y1="42" x2="240" y2="78" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <circle cx="90" cy="92" r="14" fill="#3b82f6"/>
+        <text x="90" y="96" text-anchor="middle" fill="white" font-size="10" font-weight="600">v₁</text>
+        <circle cx="250" cy="92" r="14" fill="#3b82f6"/>
+        <text x="250" y="96" text-anchor="middle" fill="white" font-size="10" font-weight="600">v₂</text>
+        <line x1="80" y1="104" x2="48" y2="138" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="100" y1="104" x2="132" y2="138" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="250" y1="106" x2="250" y2="138" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <circle cx="42" cy="152" r="13" fill="#60a5fa"/>
+        <text x="42" y="156" text-anchor="middle" fill="white" font-size="9" font-weight="600">v₃</text>
+        <circle cx="138" cy="152" r="13" fill="#60a5fa"/>
+        <text x="138" y="156" text-anchor="middle" fill="white" font-size="9" font-weight="600">v₄</text>
+        <circle cx="250" cy="152" r="13" fill="#60a5fa"/>
+        <text x="250" y="156" text-anchor="middle" fill="white" font-size="9" font-weight="600">v₅</text>
+        <line x1="42" y1="165" x2="42" y2="192" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <circle cx="42" cy="206" r="12" fill="#16a34a"/>
+        <text x="42" y="210" text-anchor="middle" fill="white" font-size="9" font-weight="700">✓</text>
+        <text x="320" y="32" text-anchor="end" font-size="10" fill="#6b7280">d=0</text>
+        <text x="320" y="95" text-anchor="end" font-size="10" fill="#6b7280">d=1</text>
+        <text x="320" y="155" text-anchor="end" font-size="10" fill="#6b7280">d=2</text>
+        <text x="320" y="209" text-anchor="end" font-size="10" fill="#6b7280">d=3</text>
+        <line x1="290" y1="22" x2="290" y2="215" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4"/>
+      </svg>
+    </div>
+    <div>
+      <h3>关键定义</h3>
+      <ul>
+        <li><strong>节点 \(v\)</strong>：一次有具体结果的实验</li>
+        <li><strong>边 \((u,v)\)</strong>：基于 \(u\) 的结果决策执行新实验</li>
+        <li><strong>深度 \(d(v)\)</strong>：从根到 \(v\) 的实验次数</li>
+        <li><strong>成功</strong>：存在 \(v\) 使 metric\((v) \leq \epsilon\)</li>
+      </ul>
+      <div class="card card-accent" style="margin-top:8px;">
+        <p style="margin:0; font-size:0.5em;">每个节点代表一次实验，如：<br><em>"STGCN, hidden=64, lr=0.001 → MAE=4.23"</em></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 上下文分配模型 ==================== -->
+<section>
+  <h2>上下文分配模型</h2>
+  <div class="formula-box" style="margin-top:8px;">
+    <p style="margin:0;">\[ C = \underbrace{c_{\text{sys}} + c_{\text{prob}}(\mathcal{P})}_{S(\mathcal{P}):\ \text{Static Overhead}} + \underbrace{c_{\text{hist}}(v)}_{\text{Inherited Context}} + \underbrace{c_{\text{work}}(v)}_{\text{Working Context}} \]</p>
+  </div>
+  <table style="margin-top:8px;">
+    <thead>
+      <tr><th>分量</th><th>含义</th><th>性质</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>\(c_{\text{sys}}\)</td><td>Agent 系统指令、工具描述、行为规范</td><td>常数，与问题无关</td></tr>
+      <tr><td>\(c_{\text{prob}}(\mathcal{P})\)</td><td>问题定义：目标、数据描述、约束</td><td>与问题类型相关的常数</td></tr>
+      <tr><td>\(c_{\text{hist}}(v)\)</td><td>所有祖先实验的压缩摘要</td><td><span class="highlight-red">随深度单调递增</span></td></tr>
+      <tr><td>\(c_{\text{work}}(v)\)</td><td>执行当前实验的剩余上下文</td><td><span class="highlight-red">随深度单调递减</span></td></tr>
+    </tbody>
+  </table>
+  <div class="formula-box" style="margin-top:8px;">
+    <p style="margin:0;">\[ c_{\text{work}}(v) = C - S(\mathcal{P}) - c_{\text{hist}}(v) \]</p>
+  </div>
+</section>
+
+<!-- ==================== 任务上下文需求 ==================== -->
+<section>
+  <h2>任务上下文需求</h2>
+  <p style="margin-bottom:4px;">执行一次实验所需的最小上下文：</p>
+  <div class="formula-box">
+    <p style="margin:0;">\[ D(\mathcal{P}) = c_{\text{code}} + c_{\text{env}} + c_{\text{cot}} + c_{\text{out}} \]</p>
+  </div>
+  <div class="grid-2" style="margin-top:8px;">
+    <div class="card" style="text-align:center; padding:8px 12px;">
+      <p style="font-weight:700; color:var(--accent); margin-bottom:2px;">\(c_{\text{code}}\)</p>
+      <p style="margin:0;">需要读写的代码<br><span class="small">（数据加载、模型、训练、评估）</span></p>
+    </div>
+    <div class="card" style="text-align:center; padding:8px 12px;">
+      <p style="font-weight:700; color:var(--accent); margin-bottom:2px;">\(c_{\text{env}}\)</p>
+      <p style="margin:0;">环境上下文<br><span class="small">（API 文档、数据 schema、文件结构）</span></p>
+    </div>
+    <div class="card" style="text-align:center; padding:8px 12px;">
+      <p style="font-weight:700; color:var(--accent); margin-bottom:2px;">\(c_{\text{cot}}\)</p>
+      <p style="margin:0;">推理过程<br><span class="small">（规划、调试、决策）</span></p>
+    </div>
+    <div class="card" style="text-align:center; padding:8px 12px;">
+      <p style="font-weight:700; color:var(--accent); margin-bottom:2px;">\(c_{\text{out}}\)</p>
+      <p style="margin:0;">实验输出<br><span class="small">（训练日志、指标、报错信息）</span></p>
+    </div>
+  </div>
+  <div class="card card-red" style="margin-top:6px;">
+    <p style="margin:0;"><strong>可行性条件：</strong>节点 \(v\) 处实验可行 ⟺ \(c_{\text{work}}(v) \geq D(\mathcal{P})\)</p>
+  </div>
+</section>
+
+<!-- ==================== 压缩假设 ==================== -->
+<section>
+  <h2>压缩假设</h2>
+  <div class="grid-2" style="margin-top:8px;">
+    <div class="card card-green" style="padding:10px 14px;">
+      <h3>理想压缩（下界）</h3>
+      <p style="margin-bottom:4px;">将实验结果压缩为最短描述长度：</p>
+      <p style="font-size:0.46em; font-family:monospace; background:#f1f5f9; padding:6px; border-radius:5px; margin:4px 0;">
+        "STGCN, h=64, lr=1e-3<br>→ MAE=4.23, RMSE=6.15"<br>
+        <strong>≈ 50 tokens</strong>
+      </p>
+      <p style="margin:0;">\(c_{\text{hist}}(v) = d \cdot \overline{\Delta I}\)</p>
+    </div>
+    <div class="card card-orange" style="padding:10px 14px;">
+      <h3>实际 LLM 摘要</h3>
+      <p style="margin-bottom:4px;">LLM 摘要包含动机、分析和建议：</p>
+      <p style="font-size:0.46em; font-family:monospace; background:#f1f5f9; padding:6px; border-radius:5px; margin:4px 0;">
+        "We tested STGCN with hidden<br>dim 64 and lr 1e-3. The model<br>converged at epoch 80..."<br>
+        <strong>≈ 400–800 tokens</strong>
+      </p>
+      <p style="margin:0;">\(c_{\text{hist}}^{\text{actual}} = \alpha \cdot d \cdot \overline{\Delta I}\)</p>
+    </div>
+  </div>
+  <div class="formula-box" style="margin-top:8px;">
+    <p style="margin:0;">压缩比: \(\alpha = \dfrac{c_{\text{hist}}^{\text{actual}}}{c_{\text{hist}}^{\text{ideal}}} \approx 8 \sim 16\)</p>
+  </div>
+</section>
+
+<!-- ==================== 核心定理 ==================== -->
+<section>
+  <h2>核心结果：最大研究深度</h2>
+  <div class="formula-box" style="margin-top:14px; padding:16px 20px;">
+    <p style="font-size:0.55em; color:var(--gray-600); margin:0 0 6px 0; font-weight:600;">定理 1（Maximum Research Depth）</p>
+    <p style="margin:0;">\[ d^*(\mathcal{P}, C, \alpha) = \left\lfloor \frac{C - S(\mathcal{P}) - D(\mathcal{P})}{\alpha \cdot \overline{\Delta I}} \right\rfloor \]</p>
+  </div>
+  <div class="grid-3" style="margin-top:14px;">
+    <div class="card" style="text-align:center; padding:10px;">
+      <p style="font-size:0.7em; font-weight:700; color:var(--accent); margin-bottom:2px;">\(C - S - D\)</p>
+      <p style="margin:0;">可用于存储历史<br>的上下文预算</p>
+    </div>
+    <div class="card" style="text-align:center; padding:10px;">
+      <p style="font-size:0.7em; font-weight:700; color:var(--orange); margin-bottom:2px;">\(\alpha \cdot \overline{\Delta I}\)</p>
+      <p style="margin:0;">每次实验记录<br>的上下文成本</p>
+    </div>
+    <div class="card" style="text-align:center; padding:10px;">
+      <p style="font-size:0.7em; font-weight:700; color:var(--green); margin-bottom:2px;">\(d^*\)</p>
+      <p style="margin:0;">最大连续<br>实验次数</p>
+    </div>
+  </div>
+  <div class="card card-accent" style="margin-top:10px;">
+    <p style="margin:0;"><strong>直观理解：</strong>上下文越大、问题固有开销越小、压缩越好（\(\alpha\) 越小）→ 能做更多实验 → 成功概率越高。</p>
+  </div>
+</section>
+
+<!-- ==================== 可解性条件 ==================== -->
+<section>
+  <h2>可解性条件</h2>
+  <p>设 \(k^*(\mathcal{P})\) = 解决问题 \(\mathcal{P}\) 所需的最少实验次数。</p>
+  <div class="formula-box" style="margin-top:8px; padding:14px 20px;">
+    <p style="font-size:0.52em; color:var(--gray-600); margin:0 0 4px 0; font-weight:600;">定理 2（Solvability Condition）</p>
+    <p style="margin:0;">\[ d^*(\mathcal{P}, C, \alpha) \geq k^*(\mathcal{P}) \]</p>
+  </div>
+  <p style="margin-top:8px;">等价地，解决问题所需的<strong>最小上下文窗口</strong>：</p>
+  <div class="formula-box">
+    <p style="margin:0;">\[ C_{\min} = \underbrace{S(\mathcal{P})}_{\text{"Entry Fee"}} + \underbrace{D(\mathcal{P})}_{\text{"Workbench"}} + \underbrace{k^* \cdot \alpha \cdot \overline{\Delta I}}_{\text{"Memory Cost"}} \]</p>
+  </div>
+  <div class="grid-3" style="margin-top:8px;">
+    <div class="card card-accent" style="text-align:center; padding:8px 10px;">
+      <p style="font-weight:700; margin-bottom:2px;">入场费</p>
+      <p style="margin:0; font-size:0.48em;">仅仅<em>理解</em>问题<br>所需的上下文</p>
+    </div>
+    <div class="card card-green" style="text-align:center; padding:8px 10px;">
+      <p style="font-weight:700; margin-bottom:2px;">工作台</p>
+      <p style="margin:0; font-size:0.48em;"><em>执行</em>一次实验<br>所需的空间</p>
+    </div>
+    <div class="card card-orange" style="text-align:center; padding:8px 10px;">
+      <p style="font-weight:700; margin-bottom:2px;">记忆成本</p>
+      <p style="margin:0; font-size:0.48em;"><em>记住</em>所有历史实验<br>所需的空间</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 案例：交通预测 ==================== -->
+<section>
+  <h2>案例分析：交通速度预测</h2>
+  <table style="margin-top:8px;">
+    <thead><tr><th>要素</th><th>设定</th></tr></thead>
+    <tbody>
+      <tr><td>目标 \(O\)</td><td>预测路网各检测器未来 T 步的交通速度</td></tr>
+      <tr><td>数据集 \(\mathcal{D}\)</td><td>METR-LA / PEMS-BAY（标准 benchmark）</td></tr>
+      <tr><td>方法空间 \(\mathcal{M}\)</td><td>GCN / GAT / STGCN / DCRNN / Transformer 及变体</td></tr>
+      <tr><td>成功阈值 \(\epsilon\)</td><td>MAE ≤ 已发表 baseline 水平</td></tr>
+    </tbody>
+  </table>
+  <h3 style="margin-top:12px;">参数估算</h3>
+  <div class="grid-2">
+    <table>
+      <thead><tr><th colspan="2">静态开销 \(S\)</th></tr></thead>
+      <tbody>
+        <tr><td>\(c_{\text{sys}}\)</td><td>~2,000 tokens</td></tr>
+        <tr><td>\(c_{\text{prob}}\)</td><td>~1,500 tokens</td></tr>
+        <tr><td><strong>合计 \(S\)</strong></td><td><strong>~3,500 tokens</strong></td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th colspan="2">任务需求 \(D\)</th></tr></thead>
+      <tbody>
+        <tr><td>\(c_{\text{code}}\)</td><td>~3,500 tokens</td></tr>
+        <tr><td>\(c_{\text{env}}\)</td><td>~1,000 tokens</td></tr>
+        <tr><td>\(c_{\text{cot}}\)</td><td>~3,000 tokens</td></tr>
+        <tr><td>\(c_{\text{out}}\)</td><td>~1,100 tokens</td></tr>
+        <tr><td><strong>合计 \(D\)</strong></td><td><strong>~8,600 tokens</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================== 理论预测 ==================== -->
+<section>
+  <h2>理论预测结果</h2>
+  <p class="small">信息增量: \(\overline{\Delta I} \approx 50\) tokens（理想压缩），压缩比 \(\alpha \approx 10\)</p>
+  <table style="margin-top:6px;">
+    <thead><tr><th>上下文窗口</th><th>\(d^*_{\text{ideal}}\)（\(\alpha=1\)）</th><th>\(d^*_{\text{actual}}\)（\(\alpha=10\)）</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>32K</td><td>398</td><td><span class="highlight-red">39</span></td><td>迭代能力有限</td></tr>
+      <tr><td>64K</td><td>1,038</td><td><span class="highlight">103</span></td><td>中等探索能力</td></tr>
+      <tr><td>128K</td><td>2,318</td><td><span class="highlight-green">231</span></td><td>可充分探索</td></tr>
+    </tbody>
+  </table>
+  <div class="bar-chart">
+    <div class="bar-item">
+      <div class="bar-value" style="color:var(--red);">39</div>
+      <div class="bar" style="height:25px; background: linear-gradient(180deg, #fca5a5, #dc2626);"></div>
+      <div class="bar-label">32K<br>实际</div>
+    </div>
+    <div class="bar-item">
+      <div class="bar-value" style="color:var(--accent);">103</div>
+      <div class="bar" style="height:65px; background: linear-gradient(180deg, #93c5fd, #2563eb);"></div>
+      <div class="bar-label">64K<br>实际</div>
+    </div>
+    <div class="bar-item">
+      <div class="bar-value" style="color:var(--green);">231</div>
+      <div class="bar" style="height:140px; background: linear-gradient(180deg, #86efac, #16a34a);"></div>
+      <div class="bar-label">128K<br>实际</div>
+    </div>
+    <div style="width:20px;"></div>
+    <div class="bar-item">
+      <div class="bar-value" style="color:#94a3b8;">398</div>
+      <div class="bar" style="height:40px; background: linear-gradient(180deg, #e2e8f0, #94a3b8); opacity:0.5;"></div>
+      <div class="bar-label">32K<br>理想</div>
+    </div>
+    <div class="bar-item">
+      <div class="bar-value" style="color:#94a3b8;">1038</div>
+      <div class="bar" style="height:95px; background: linear-gradient(180deg, #e2e8f0, #94a3b8); opacity:0.5;"></div>
+      <div class="bar-label">64K<br>理想</div>
+    </div>
+    <div class="bar-item">
+      <div class="bar-value" style="color:#94a3b8;">2318</div>
+      <div class="bar" style="height:148px; background: linear-gradient(180deg, #e2e8f0, #94a3b8); opacity:0.5;"></div>
+      <div class="bar-label">128K<br>理想</div>
+    </div>
+  </div>
+  <p class="small" style="text-align:center; margin-top:2px;">
+    <span style="color:var(--accent);">■</span> 实际（\(\alpha=10\)） &nbsp;
+    <span style="color:#94a3b8;">■</span> 理想（\(\alpha=1\)）
+    &nbsp;— 压缩比 \(\alpha\) 使深度降低约 10 倍
+  </p>
+</section>
+
+<!-- ==================== 实验设计 Phase 1 ==================== -->
+<section>
+  <h2>实验设计 — 第一阶段</h2>
+  <div style="margin-top:8px;">
+    <div class="card card-accent" style="margin-bottom:6px;">
+      <p style="margin:0;"><span class="tag tag-blue">实验 1</span> <strong>参数校准</strong> —
+      让 Agent 执行交通预测任务，记录各上下文分量的实际 token 数，与理论估算对比。</p>
+    </div>
+    <div class="card card-green" style="margin-bottom:6px;">
+      <p style="margin:0;"><span class="tag tag-green">实验 2</span> <strong>深度极限测试</strong> —
+      控制上下文窗口（32K / 64K / 128K），记录 Agent 在不同深度的实验成功率。验证 H1。</p>
+    </div>
+    <div class="card card-orange" style="margin-bottom:6px;">
+      <p style="margin:0;"><span class="tag tag-orange">实验 3</span> <strong>压缩比测量</strong> —
+      对比三种摘要方式（理想/LLM 摘要/结构化模板），测量实际 \(\alpha\) 值。验证 H3。</p>
+    </div>
+    <div class="card card-red">
+      <p style="margin:0;"><span class="tag tag-red">实验 4</span> <strong>难度梯度</strong> —
+      设置三级难度：L1 单步 MLP → L2 多步 GCN → L3 架构搜索。估算各级 \(k^*\)。验证 H2。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 实验设计 Phase 2 ==================== -->
+<section>
+  <h2>实验设计 — 第二阶段：跨问题泛化</h2>
+  <div class="grid-3" style="margin-top:12px;">
+    <div class="card card-green" style="text-align:center; padding:10px 12px;">
+      <p style="font-weight:700; color:var(--green); font-size:0.65em; margin-bottom:4px;">网络均衡分析</p>
+      <p style="margin:0; font-size:0.46em;">
+        UE / SO 分配<br><br>
+        \(c_{\text{code}}\): 低<br>
+        \(c_{\text{env}}\): 低<br>
+        \(c_{\text{cot}}\): <strong>高</strong>（数学推理）<br>
+        \(c_{\text{out}}\): 低
+      </p>
+      <p style="margin-top:6px;"><span class="tag tag-green">最容易</span></p>
+    </div>
+    <div class="card card-accent" style="text-align:center; padding:10px 12px;">
+      <p style="font-weight:700; color:var(--accent); font-size:0.65em; margin-bottom:4px;">交通预测</p>
+      <p style="margin:0; font-size:0.46em;">
+        GNN 时空预测<br><br>
+        \(c_{\text{code}}\): 中<br>
+        \(c_{\text{env}}\): 中低<br>
+        \(c_{\text{cot}}\): 中<br>
+        \(c_{\text{out}}\): 中
+      </p>
+      <p style="margin-top:6px;"><span class="tag tag-blue">中等</span></p>
+    </div>
+    <div class="card card-red" style="text-align:center; padding:10px 12px;">
+      <p style="font-weight:700; color:var(--red); font-size:0.65em; margin-bottom:4px;">信号灯优化</p>
+      <p style="margin:0; font-size:0.46em;">
+        RL 信号控制<br><br>
+        \(c_{\text{code}}\): 中<br>
+        \(c_{\text{env}}\): <strong>极高</strong>（SUMO）<br>
+        \(c_{\text{cot}}\): 中<br>
+        \(c_{\text{out}}\): 高
+      </p>
+      <p style="margin-top:6px;"><span class="tag tag-red">最难</span></p>
+    </div>
+  </div>
+  <div class="formula-box" style="margin-top:12px;">
+    <p style="margin:0;">预期排序: \(C_{\min}(\text{Equilibrium}) < C_{\min}(\text{Prediction}) < C_{\min}(\text{Signal})\)</p>
+  </div>
+</section>
+
+<!-- ==================== 评估指标 ==================== -->
+<section>
+  <h2>评估指标体系</h2>
+  <table style="margin-top:12px;">
+    <thead><tr><th>指标</th><th>定义</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>理论研究深度 \(d^*_{\text{ideal}}\)</td>
+        <td>\(\lfloor(C - S - D) / \overline{\Delta I}\rfloor\)</td>
+        <td>理论上界</td>
+      </tr>
+      <tr>
+        <td>实际研究深度 \(d^*_{\text{actual}}\)</td>
+        <td>Agent 实验中实际达到的最大深度</td>
+        <td>实测值</td>
+      </tr>
+      <tr>
+        <td>压缩比 \(\alpha\)</td>
+        <td>\(c_{\text{hist}}^{\text{actual}} / c_{\text{hist}}^{\text{ideal}}\)</td>
+        <td>量化压缩差距</td>
+      </tr>
+      <tr>
+        <td>深度-成功率曲线</td>
+        <td>不同深度的实验成功率 \(P(d)\)</td>
+        <td>验证 H1</td>
+      </tr>
+      <tr>
+        <td>最小上下文 \(C_{\min}\)</td>
+        <td>\(S + D + k^* \cdot \alpha \cdot \overline{\Delta I}\)</td>
+        <td>问题可解性分类</td>
+      </tr>
+      <tr>
+        <td>上下文利用效率</td>
+        <td>metric improvement / tokens consumed</td>
+        <td>衡量 Agent 效率</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ==================== 预期贡献 ==================== -->
+<section>
+  <h2>预期贡献</h2>
+  <div style="margin-top:14px;">
+    <div class="card card-accent" style="margin-bottom:8px;">
+      <p style="margin:0;"><span class="icon-num">1</span><strong>CCTS 理论框架</strong> — 首次将 AI 自主科研建模为上下文约束树搜索问题，提供分析 AI Agent 能力边界的理论工具。</p>
+    </div>
+    <div class="card card-green" style="margin-bottom:8px;">
+      <p style="margin:0;"><span class="icon-num">2</span><strong>可解性分析方法</strong> — 基于 \(C_{\min}\) 定量评估哪些交通研究可以交给 AI 完成。</p>
+    </div>
+    <div class="card card-orange" style="margin-bottom:8px;">
+      <p style="margin:0;"><span class="icon-num">3</span><strong>压缩差距量化</strong> — 首次实测理想压缩与 LLM 摘要的差距 \(\alpha\)，为工程优化指明方向。</p>
+    </div>
+    <div class="card card-red">
+      <p style="margin:0;"><span class="icon-num">4</span><strong>AI 可解性图谱</strong> — 基于上下文需求对典型交通问题分类，为研究者提供实用参考。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 局限与未来 ==================== -->
+<section>
+  <h2>局限性与未来方向</h2>
+  <div class="grid-2" style="margin-top:12px;">
+    <div>
+      <h3>当前简化假设</h3>
+      <ul>
+        <li><strong>单路径模型</strong>：未建模跨分支的信息共享</li>
+        <li><strong>固定需求假设</strong>：假设 \(D(\mathcal{P})\) 对同类问题为常数</li>
+        <li><strong>忽略注意力退化</strong>："Lost in the Middle" 效应可能导致提前退化</li>
+      </ul>
+    </div>
+    <div>
+      <h3>未来方向</h3>
+      <ul>
+        <li><strong>机制 B 建模</strong>：引入上下文长度-准确率衰减函数</li>
+        <li><strong>全流程扩展</strong>：将 CCTS 扩展至 Idea 生成和论文撰写</li>
+        <li><strong>跨领域泛化</strong>：材料科学、药物发现等其他领域</li>
+        <li><strong>工程优化</strong>：动态压缩、选择性遗忘、外部记忆增强</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 致谢 ==================== -->
+<section data-background-gradient="linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f0f9ff 100%)">
+  <div style="text-align:center; padding-top:80px;">
+    <h1 style="text-align:center; font-size:1.8em;">谢谢</h1>
+    <div style="width:60px; height:3px; background:var(--accent); margin:18px auto;"></div>
+    <p style="font-size:0.7em; color:var(--gray-600);">欢迎提问与讨论</p>
+  </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  width: 1100,
+  height: 700,
+  margin: 0.06,
+  transition: 'slide',
+  transitionSpeed: 'default',
+  center: false,
+  plugins: []
+});
+</script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']] },
+  svg: { fontCache: 'global' },
+  startup: { typeset: true }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</body>
+</html>

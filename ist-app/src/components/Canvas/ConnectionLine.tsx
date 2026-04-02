@@ -15,7 +15,8 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
   if (!from || !to) return null
 
   const isIdea = connection.type === 'idea'
-  const strokeColor = isIdea ? '#f59e0b' : '#9ca3af'
+  const strokeColor = isIdea ? '#eab308' : '#6b7280'
+  const strokeWidth = isIdea ? 2.5 : 2
 
   let d: string
   if (isIdea) {
@@ -39,9 +40,8 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
       d={d}
       fill="none"
       stroke={strokeColor}
-      strokeWidth={2}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
-      opacity={0.8}
     />
   )
 }

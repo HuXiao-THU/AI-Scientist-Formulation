@@ -2,15 +2,18 @@ import type { ISTProject, ISTNode, NodePosition, LayoutResult, ConnectionInfo } 
 
 const NODE_HEIGHT = 36
 const NODE_PADDING_H = 24
-const NODE_MIN_WIDTH = 80
+const NODE_MIN_WIDTH = 100
 const NODE_MAX_WIDTH = 300
 const H_GAP = 60
 const V_GAP = 16
-const CHAR_WIDTH = 8
+const CHAR_WIDTH = 9
 
-function estimateNodeWidth(title: string): number {
-  const textWidth = title.length * CHAR_WIDTH + NODE_PADDING_H * 2
-  if (title.length === 0) return NODE_MIN_WIDTH
+const PLACEHOLDER_IDEA = 'New Idea'
+const PLACEHOLDER_EXPERIMENT = 'New Experiment'
+
+function estimateNodeWidth(title: string, type: 'idea' | 'experiment' = 'idea'): number {
+  const displayText = title || (type === 'idea' ? PLACEHOLDER_IDEA : PLACEHOLDER_EXPERIMENT)
+  const textWidth = displayText.length * CHAR_WIDTH + NODE_PADDING_H * 2
   return Math.max(NODE_MIN_WIDTH, Math.min(NODE_MAX_WIDTH, textWidth))
 }
 
@@ -34,7 +37,7 @@ export function computeLayout(project: ISTProject): LayoutResult {
     const node = project.nodes[nodeId]
     if (!node) return { width: 0, height: 0, experimentColumnHeight: 0, ideaColumnHeight: 0 }
 
-    const nodeWidth = estimateNodeWidth(node.title)
+    const nodeWidth = estimateNodeWidth(node.title, node.type)
 
     if (node.type === 'experiment') {
       const m: SubtreeMetrics = {
@@ -105,7 +108,7 @@ export function computeLayout(project: ISTProject): LayoutResult {
     const node = project.nodes[nodeId]
     if (!node) return
 
-    const nodeWidth = estimateNodeWidth(node.title)
+    const nodeWidth = estimateNodeWidth(node.title, node.type)
     positions[nodeId] = {
       id: nodeId,
       x,
@@ -130,7 +133,7 @@ export function computeLayout(project: ISTProject): LayoutResult {
         id: exp.id,
         x,
         y: expY,
-        width: estimateNodeWidth(exp.title),
+        width: estimateNodeWidth(exp.title, 'experiment'),
         height: NODE_HEIGHT
       }
       connections.push({ fromId: nodeId, toId: exp.id, type: 'experiment' })

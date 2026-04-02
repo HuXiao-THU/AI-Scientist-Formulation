@@ -1,1 +1,0 @@
-ccts_worker

@@ -21,3 +21,11 @@ html, body, #root {
   background: #c4c9d4;
   border-radius: 3px;
 }
+
+/* MiniMap viewport: semi-transparent frame + dim outside (react-zoom-pan-pinch default is heavy red) */
+.canvas-mini-map .rzpp-preview {
+  border-width: 2px !important;
+  border-style: solid !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.22) !important;
+}

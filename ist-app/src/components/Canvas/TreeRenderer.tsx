@@ -1,21 +1,20 @@
-import React, { useMemo } from 'react'
+import React from 'react'
+import type { LayoutResult } from '@shared/types'
 import { useTreeStore } from '../../store/useTreeStore'
 import { useUIStore } from '../../store/useUIStore'
-import { computeLayout } from '../../layout/treeLayout'
 import { IdeaNode } from './IdeaNode'
 import { ExperimentNode } from './ExperimentNode'
 import { ConnectionLine } from './ConnectionLine'
 
-export const TreeRenderer: React.FC = () => {
+interface TreeRendererProps {
+  layout: LayoutResult | null
+}
+
+export const TreeRenderer: React.FC<TreeRendererProps> = ({ layout }) => {
   const project = useTreeStore((s) => s.project)
   const addNode = useTreeStore((s) => s.addNode)
   const selectedNodeId = useUIStore((s) => s.selectedNodeId)
   const selectNode = useUIStore((s) => s.selectNode)
-
-  const layout = useMemo(() => {
-    if (!project) return null
-    return computeLayout(project)
-  }, [project])
 
   if (!project || !layout) return null
 

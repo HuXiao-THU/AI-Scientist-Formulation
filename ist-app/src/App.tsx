@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useRef } from 'react'
 import { Canvas } from './components/Canvas/Canvas'
 import { NodeDetail } from './components/Sidebar/NodeDetail'
 import { WelcomePage } from './components/Welcome/WelcomePage'
@@ -23,9 +23,33 @@ const App: React.FC = () => {
   const selectedNodeId = useUIStore((s) => s.selectedNodeId)
   const selectNode = useUIStore((s) => s.selectNode)
   const closeSidebar = useUIStore((s) => s.closeSidebar)
+  const sidebarWidthPx = useUIStore((s) => s.sidebarWidthPx)
+  const setSidebarWidthPx = useUIStore((s) => s.setSidebarWidthPx)
 
   const deleteNode = useTreeStore((s) => s.deleteNode)
   const setDeleteConfirmNodeId = useUIStore((s) => s.setDeleteConfirmNodeId)
+
+  const sidebarResizeRef = useRef<{ startX: number; startW: number } | null>(
+    null
+  )
+
+  const sidebarOpen = useUIStore((s) => s.sidebarOpen)
+
+  useEffect(() => {
+    const clampSidebarWidth = () => {
+      const w = window.innerWidth
+      const minW = w * 0.25
+      const maxW = w * 0.5
+      const current = useUIStore.getState().sidebarWidthPx
+      const next = Math.min(maxW, Math.max(minW, current))
+      if (next !== current) {
+        useUIStore.getState().setSidebarWidthPx(next)
+      }
+    }
+    clampSidebarWidth()
+    window.addEventListener('resize', clampSidebarWidth)
+    return () => window.removeEventListener('resize', clampSidebarWidth)
+  }, [sidebarOpen])
 
   useEffect(() => {
     const tryRestoreLast = async () => {
@@ -201,9 +225,60 @@ const App: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        <Canvas />
-        <NodeDetail />
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 min-w-0 min-h-0">
+          <Canvas />
+        </div>
+        {sidebarOpen && selectedNodeId && (
+          <>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize node details panel"
+              onPointerDown={(e) => {
+                if (e.button !== 0) return
+                e.preventDefault()
+                const el = e.currentTarget
+                el.setPointerCapture(e.pointerId)
+                sidebarResizeRef.current = {
+                  startX: e.clientX,
+                  startW: sidebarWidthPx
+                }
+              }}
+              onPointerMove={(e) => {
+                const drag = sidebarResizeRef.current
+                if (!drag || !e.buttons) return
+                const w = window.innerWidth
+                const minW = w * 0.25
+                const maxW = w * 0.5
+                const delta = drag.startX - e.clientX
+                const next = Math.min(
+                  maxW,
+                  Math.max(minW, drag.startW + delta)
+                )
+                setSidebarWidthPx(next)
+              }}
+              onPointerUp={(e) => {
+                sidebarResizeRef.current = null
+                try {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                } catch {
+                  /* ignore */
+                }
+              }}
+              onPointerCancel={() => {
+                sidebarResizeRef.current = null
+              }}
+              className="w-1.5 shrink-0 cursor-col-resize bg-gray-200 hover:bg-amber-400/70 active:bg-amber-500/80 border-l border-r border-gray-300/80 z-10 touch-none select-none"
+            />
+            <div
+              className="shrink-0 h-full min-h-0 flex flex-col border-l border-gray-200"
+              style={{ width: sidebarWidthPx }}
+            >
+              <NodeDetail />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modals */}

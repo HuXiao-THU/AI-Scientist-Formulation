@@ -102,7 +102,7 @@ export const NodeDetail: React.FC = () => {
   }
 
   return (
-    <div className="w-80 h-full bg-white border-l border-gray-200 flex flex-col shadow-xl">
+    <div className="w-full min-w-0 h-full bg-white border-l border-gray-200 flex flex-col shadow-xl">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <h3 className="text-sm font-semibold text-gray-800">Node Details</h3>
         <button

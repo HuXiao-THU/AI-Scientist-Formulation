@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTreeStore } from '../../store/useTreeStore'
 import { useUIStore } from '../../store/useUIStore'
+import type { AIConfig } from '@shared/types'
 
 export const NodeDetail: React.FC = () => {
   const selectedNodeId = useUIStore((s) => s.selectedNodeId)
@@ -10,11 +11,15 @@ export const NodeDetail: React.FC = () => {
 
   const project = useTreeStore((s) => s.project)
   const updateNode = useTreeStore((s) => s.updateNode)
+  const getPathFromRoot = useTreeStore((s) => s.getPathFromRoot)
+  const getSubtreeNodes = useTreeStore((s) => s.getSubtreeNodes)
 
   const node = selectedNodeId && project ? project.nodes[selectedNodeId] : null
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [aiLoading, setAiLoading] = useState<'title' | 'summarize' | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   useEffect(() => {
     if (node) {
@@ -48,6 +53,76 @@ export const NodeDetail: React.FC = () => {
     } else {
       useTreeStore.getState().deleteNode(node.id)
       closeSidebar()
+    }
+  }
+
+  const getAIConfig = async (): Promise<AIConfig | null> => {
+    if (!window.electronAPI?.store) return null
+    const config = (await window.electronAPI.store.get('aiConfig')) as AIConfig | null
+    if (!config?.apiKey) {
+      setAiError('Please configure AI settings first (API Key required)')
+      return null
+    }
+    return config
+  }
+
+  const handleGenerateTitle = async () => {
+    const desc = description.trim() || node.description.trim()
+    if (!desc) {
+      setAiError('Please enter a description first')
+      return
+    }
+    const config = await getAIConfig()
+    if (!config) return
+
+    setAiLoading('title')
+    setAiError(null)
+    try {
+      const generatedTitle = await window.electronAPI.ai.generateTitle(desc, config)
+      if (generatedTitle) {
+        setTitle(generatedTitle)
+        updateNode(node.id, { title: generatedTitle })
+      }
+    } catch (err) {
+      setAiError(`Failed to generate title: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
+  const handleSummarize = async () => {
+    if (node.type !== 'idea') return
+    const config = await getAIConfig()
+    if (!config) return
+
+    setAiLoading('summarize')
+    setAiError(null)
+    try {
+      const pathNodes = getPathFromRoot(node.id)
+      const subtreeNodes = getSubtreeNodes(node.id)
+
+      const pathFromRoot = pathNodes.map(
+        (n) => `[${n.type}] ${n.title || '(untitled)'}: ${n.description || '(no description)'}`
+      )
+      const subtreeTexts = subtreeNodes.map(
+        (n) => `[${n.type}] ${n.title || '(untitled)'}: ${n.description || '(no description)'}`
+      )
+
+      const summary = await window.electronAPI.ai.summarize(
+        { pathFromRoot, subtreeNodes: subtreeTexts },
+        config
+      )
+      if (summary) {
+        const newDesc = description
+          ? `${description}\n\n---\nAI Summary:\n${summary}`
+          : `AI Summary:\n${summary}`
+        setDescription(newDesc)
+        updateNode(node.id, { description: newDesc })
+      }
+    } catch (err) {
+      setAiError(`Failed to summarize: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setAiLoading(null)
     }
   }
 
@@ -90,6 +165,13 @@ export const NodeDetail: React.FC = () => {
             placeholder="Enter title..."
             className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
           />
+          <button
+            onClick={handleGenerateTitle}
+            disabled={aiLoading !== null}
+            className="mt-1.5 w-full text-xs px-2 py-1.5 bg-amber-900/30 hover:bg-amber-900/50 text-amber-400 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {aiLoading === 'title' ? 'Generating...' : 'AI Generate Title'}
+          </button>
         </div>
 
         <div>
@@ -105,6 +187,22 @@ export const NodeDetail: React.FC = () => {
             className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500 resize-y"
           />
         </div>
+
+        {node.type === 'idea' && (
+          <button
+            onClick={handleSummarize}
+            disabled={aiLoading !== null}
+            className="w-full text-xs px-2 py-1.5 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {aiLoading === 'summarize' ? 'Summarizing...' : 'AI Summarize'}
+          </button>
+        )}
+
+        {aiError && (
+          <div className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1.5">
+            {aiError}
+          </div>
+        )}
 
         {node.type === 'experiment' && (
           <div>

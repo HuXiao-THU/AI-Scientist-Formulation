@@ -1,0 +1,30 @@
+appId: com.ist.app
+productName: Idea Search Tree
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron/*'
+  - '!shared/*'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.*.json,electron.vite.config.*}'
+mac:
+  target:
+    - dmg
+    - zip
+  artifactName: '${name}-${version}-${os}-${arch}.${ext}'
+  entitlementsInherit: build/entitlements.mac.plist
+win:
+  target:
+    - nsis
+  artifactName: '${name}-${version}-${os}-${arch}.${ext}'
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+fileAssociations:
+  - ext: ist
+    name: Idea Search Tree
+    description: Idea Search Tree Project
+    role: Editor

@@ -3,17 +3,34 @@ import type { ISTProject, ISTNode, NodePosition, LayoutResult, ConnectionInfo } 
 const NODE_HEIGHT = 36
 const NODE_PADDING_H = 24
 const NODE_MIN_WIDTH = 100
-const NODE_MAX_WIDTH = 300
+/** Upper bound to avoid absurd titles; must not clip real UI text (previously 300 caused overlap). */
+const NODE_MAX_WIDTH = 1600
 const H_GAP = 60
 const V_GAP = 16
-const CHAR_WIDTH = 9
+
+/** Horizontal space for +Idea / +Experiment controls east of the idea rect (see IdeaNode.tsx: +6, width 16). */
+export const IDEA_NODE_RIGHT_GUTTER = 22
+
+function estimateCharDisplayWidth(ch: string): number {
+  const cp = ch.codePointAt(0) ?? 0
+  if (cp <= 0x20) return 4
+  if (cp < 0x80) return 7.2
+  return 13
+}
+
+function ideaLayoutSpan(rectWidth: number): number {
+  return rectWidth + IDEA_NODE_RIGHT_GUTTER
+}
 
 const PLACEHOLDER_IDEA = 'New Idea'
 const PLACEHOLDER_EXPERIMENT = 'New Experiment'
 
 function estimateNodeWidth(title: string, type: 'idea' | 'experiment' = 'idea'): number {
   const displayText = title || (type === 'idea' ? PLACEHOLDER_IDEA : PLACEHOLDER_EXPERIMENT)
-  const textWidth = displayText.length * CHAR_WIDTH + NODE_PADDING_H * 2
+  let textWidth = NODE_PADDING_H * 2
+  for (const ch of displayText) {
+    textWidth += estimateCharDisplayWidth(ch)
+  }
   return Math.max(NODE_MIN_WIDTH, Math.min(NODE_MAX_WIDTH, textWidth))
 }
 
@@ -59,11 +76,16 @@ export function computeLayout(project: ISTProject): LayoutResult {
       .filter((n): n is ISTNode => !!n && n.type === 'idea')
 
     let expColumnHeight = 0
+    let maxExpWidth = 0
     for (const exp of experimentChildren) {
       computeMetrics(exp.id)
+      maxExpWidth = Math.max(maxExpWidth, estimateNodeWidth(exp.title, 'experiment'))
       if (expColumnHeight > 0) expColumnHeight += V_GAP
       expColumnHeight += NODE_HEIGHT
     }
+
+    /** Same column as this idea: experiments share x; child ideas start after the widest of them. */
+    const columnAnchorWidth = Math.max(ideaLayoutSpan(nodeWidth), maxExpWidth)
 
     let ideaColumnHeight = 0
     let ideaColumnMaxWidth = 0
@@ -80,7 +102,7 @@ export function computeLayout(project: ISTProject): LayoutResult {
           : 0)
       ideaColumnHeight += childTotalHeight
 
-      const childSubtreeWidth = nodeWidth + H_GAP + childMetrics.width
+      const childSubtreeWidth = columnAnchorWidth + H_GAP + childMetrics.width
       ideaColumnMaxWidth = Math.max(ideaColumnMaxWidth, childSubtreeWidth)
     }
 
@@ -95,7 +117,7 @@ export function computeLayout(project: ISTProject): LayoutResult {
     )
 
     const m: SubtreeMetrics = {
-      width: nodeWidth + rightColumnWidth,
+      width: columnAnchorWidth + rightColumnWidth,
       height: totalHeight,
       experimentColumnHeight: expColumnHeight,
       ideaColumnHeight
@@ -127,21 +149,26 @@ export function computeLayout(project: ISTProject): LayoutResult {
       .map((id) => project.nodes[id])
       .filter((n): n is ISTNode => !!n && n.type === 'idea')
 
+    let maxExpW = 0
     let expY = y + NODE_HEIGHT + V_GAP
     for (const exp of experimentChildren) {
+      const expW = estimateNodeWidth(exp.title, 'experiment')
+      maxExpW = Math.max(maxExpW, expW)
       positions[exp.id] = {
         id: exp.id,
         x,
         y: expY,
-        width: estimateNodeWidth(exp.title, 'experiment'),
+        width: expW,
         height: NODE_HEIGHT
       }
       connections.push({ fromId: nodeId, toId: exp.id, type: 'experiment' })
       expY += NODE_HEIGHT + V_GAP
     }
 
+    const columnAnchorWidth = Math.max(ideaLayoutSpan(nodeWidth), maxExpW)
+
     let ideaY = y
-    const ideaX = x + nodeWidth + H_GAP
+    const ideaX = x + columnAnchorWidth + H_GAP
     for (const idea of ideaChildren) {
       positionNode(idea.id, ideaX, ideaY)
       connections.push({ fromId: nodeId, toId: idea.id, type: 'idea' })
@@ -166,7 +193,10 @@ export function computeLayout(project: ISTProject): LayoutResult {
   let maxX = 0
   let maxY = 0
   for (const pos of Object.values(positions)) {
-    maxX = Math.max(maxX, pos.x + pos.width)
+    const n = project.nodes[pos.id]
+    const rightEdge =
+      n?.type === 'idea' ? pos.x + ideaLayoutSpan(pos.width) : pos.x + pos.width
+    maxX = Math.max(maxX, rightEdge)
     maxY = Math.max(maxY, pos.y + pos.height)
   }
 

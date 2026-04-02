@@ -4,7 +4,7 @@ import { TreeRenderer } from './TreeRenderer'
 
 export const Canvas: React.FC = () => {
   return (
-    <div className="w-full h-full bg-[#1a1a2e] overflow-hidden">
+    <div className="w-full h-full bg-white overflow-hidden">
       <TransformWrapper
         initialScale={1}
         minScale={0.25}

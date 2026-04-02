@@ -7,8 +7,8 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #1a1a2e;
-  color: #e0e0e0;
+  background-color: #ffffff;
+  color: #1f2937;
 }
 
 ::-webkit-scrollbar {
@@ -18,6 +18,6 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #444;
+  background: #c4c9d4;
   border-radius: 3px;
 }

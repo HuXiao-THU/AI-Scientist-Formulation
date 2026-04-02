@@ -1,5 +1,6 @@
 import React from 'react'
 import type { NodePosition, ConnectionInfo } from '@shared/types'
+import { IDEA_NODE_RIGHT_GUTTER } from '../../layout/treeLayout'
 
 interface ConnectionLineProps {
   connection: ConnectionInfo
@@ -20,7 +21,7 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
 
   let d: string
   if (isIdea) {
-    const startX = from.x + from.width
+    const startX = from.x + from.width + IDEA_NODE_RIGHT_GUTTER
     const startY = from.y + from.height / 2
     const endX = to.x
     const endY = to.y + to.height / 2

@@ -8,7 +8,7 @@
     "build": "electron-vite build",
     "preview": "env -u ELECTRON_RUN_AS_NODE NO_SANDBOX=1 electron-vite preview",
     "postinstall": "node node_modules/electron/install.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b --force",
     "package": "electron-builder"
   },
   "dependencies": {

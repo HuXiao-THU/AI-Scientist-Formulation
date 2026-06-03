@@ -53,7 +53,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', clampSidebarWidth)
   }, [sidebarOpen])
 
-  const handleExpEvent = useExperimentStore((s) => s.handleExpEvent)
+  const handleExpEvent = useExperimentStore((s) => s.handleEvent)
   const updateNode = useTreeStore((s) => s.updateNode)
 
   useEffect(() => {

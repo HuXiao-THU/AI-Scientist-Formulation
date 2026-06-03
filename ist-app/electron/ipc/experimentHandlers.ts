@@ -42,7 +42,6 @@ export function registerExperimentHandlers(): void {
         harness,
         (ev) => {
           if (ev.type === 'run_start') {
-            runId = ev.runId
             activeRunByNode.set(nodeId, ev.runId)
           }
           sendEvent(event.sender, ev)

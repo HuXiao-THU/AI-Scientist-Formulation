@@ -5,9 +5,12 @@ import { app } from 'electron'
 import type { HarnessConfig } from '@shared/types'
 import { DEFAULT_HARNESS_CONFIG } from '@shared/types'
 
-const storePath = join(app.getPath('userData'), 'settings.json')
+function getStorePath(): string {
+  return join(app.getPath('userData'), 'settings.json')
+}
 
 export function readStore(): Record<string, unknown> {
+  const storePath = getStorePath()
   try {
     if (existsSync(storePath)) {
       return JSON.parse(readFileSync(storePath, 'utf-8'))
@@ -19,7 +22,7 @@ export function readStore(): Record<string, unknown> {
 }
 
 export function writeStore(data: Record<string, unknown>): void {
-  writeFileSync(storePath, JSON.stringify(data, null, 2), 'utf-8')
+  writeFileSync(getStorePath(), JSON.stringify(data, null, 2), 'utf-8')
 }
 
 export function getHarnessConfig(): HarnessConfig {

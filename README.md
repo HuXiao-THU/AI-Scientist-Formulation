@@ -67,6 +67,12 @@ npm run package
 
 输出目录见 `ist-app/electron-builder.yml` 中的 `directories.output`（默认 `ist-app/dist`）。
 
+### Linux / Cursor 终端常见问题
+
+- **`Electron uninstall`**：`electron` 二进制未下载。在 `ist-app` 下执行 `node node_modules/electron/install.js`（国内可先 `export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"`）。`npm run dev` 已带 `postinstall` 自动尝试安装。
+- **`app.getPath` / `whenReady` 为 undefined**：Cursor 等 Electron 应用会在子 shell 里设置 `ELECTRON_RUN_AS_NODE=1`。`npm run dev` 已用 `env -u ELECTRON_RUN_AS_NODE` 规避。
+- **`chrome-sandbox` / SUID sandbox FATAL**（多见于 Linux 开发机）：`npm run dev` 已设置 `NO_SANDBOX=1`（等价于 Electron 的 `--no-sandbox`，仅建议开发用）。若要在生产环境启用沙箱，可对 `node_modules/electron/dist/chrome-sandbox` 执行 `sudo chown root:root` 与 `sudo chmod 4755`。
+
 ### 自动化实验前置条件
 
 端到端跑实验需要本机已安装并完成登录的 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)。可用以下命令做 smoke test：

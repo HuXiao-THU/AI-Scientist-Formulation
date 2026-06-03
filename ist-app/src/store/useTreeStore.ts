@@ -13,7 +13,16 @@ interface TreeState {
   markClean: () => void
 
   addNode: (parentId: string, type: 'idea' | 'experiment') => string
-  updateNode: (id: string, updates: Partial<Pick<ISTNode, 'title' | 'description'>>) => void
+  updateNode: (
+    id: string,
+    updates: Partial<
+      Pick<
+        ISTNode,
+        'title' | 'description' | 'gitBranch' | 'experimentResult' | 'runStatus'
+      >
+    >
+  ) => void
+  setWorkspacePath: (workspacePath: string) => void
   deleteNode: (id: string) => void
 
   getNode: (id: string) => ISTNode | undefined
@@ -209,5 +218,22 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
     collect(id)
     return result
+  },
+
+  setWorkspacePath: (workspacePath) => {
+    const state = get()
+    if (!state.project) return
+    const now = new Date().toISOString()
+    set({
+      project: {
+        ...state.project,
+        meta: {
+          ...state.project.meta,
+          workspacePath,
+          updatedAt: now
+        }
+      },
+      isDirty: true
+    })
   }
 }))

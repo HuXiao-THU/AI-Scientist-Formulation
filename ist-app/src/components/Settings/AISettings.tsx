@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import type { AIConfig, AIProvider } from '@shared/types'
+import type { AIConfig, AIProvider, HarnessConfig } from '@shared/types'
+import { DEFAULT_HARNESS_CONFIG } from '@shared/types'
 
 interface AISettingsProps {
   open: boolean
@@ -20,12 +21,17 @@ const PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; model: string }> 
 
 export const AISettings: React.FC<AISettingsProps> = ({ open, onClose }) => {
   const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG)
+  const [harness, setHarness] = useState<HarnessConfig>(DEFAULT_HARNESS_CONFIG)
 
   useEffect(() => {
-    if (open && window.electronAPI?.store) {
+    if (!open) return
+    if (window.electronAPI?.store) {
       window.electronAPI.store.get('aiConfig').then((stored) => {
         if (stored) setConfig(stored as AIConfig)
       })
+    }
+    if (window.electronAPI?.experiment?.getHarnessConfig) {
+      window.electronAPI.experiment.getHarnessConfig().then(setHarness)
     }
   }, [open])
 
@@ -45,6 +51,9 @@ export const AISettings: React.FC<AISettingsProps> = ({ open, onClose }) => {
     if (window.electronAPI?.store) {
       await window.electronAPI.store.set('aiConfig', config)
     }
+    if (window.electronAPI?.experiment?.setHarnessConfig) {
+      await window.electronAPI.experiment.setHarnessConfig(harness)
+    }
     onClose()
   }
 
@@ -53,7 +62,7 @@ export const AISettings: React.FC<AISettingsProps> = ({ open, onClose }) => {
       <div className="bg-[#16213e] rounded-xl shadow-2xl border border-[#2a2a4a] w-[420px] max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a2a4a]">
           <h2 className="text-base font-semibold text-gray-200">
-            AI Settings
+            Settings
           </h2>
           <button
             onClick={onClose}
@@ -117,6 +126,76 @@ export const AISettings: React.FC<AISettingsProps> = ({ open, onClose }) => {
               }
               className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
             />
+          </div>
+
+          <div className="border-t border-[#2a2a4a] pt-4 mt-2">
+            <h3 className="text-sm font-medium text-gray-300 mb-3">
+              Experiment Harness (Claude Code CLI)
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Command</label>
+                <input
+                  type="text"
+                  value={harness.command}
+                  onChange={(e) =>
+                    setHarness((prev) => ({ ...prev, command: e.target.value }))
+                  }
+                  placeholder="claude"
+                  className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Model (optional)
+                </label>
+                <input
+                  type="text"
+                  value={harness.model ?? ''}
+                  onChange={(e) =>
+                    setHarness((prev) => ({
+                      ...prev,
+                      model: e.target.value || undefined
+                    }))
+                  }
+                  className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Permission mode
+                </label>
+                <input
+                  type="text"
+                  value={harness.permissionMode}
+                  onChange={(e) =>
+                    setHarness((prev) => ({
+                      ...prev,
+                      permissionMode: e.target.value
+                    }))
+                  }
+                  className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Extra args (space-separated)
+                </label>
+                <input
+                  type="text"
+                  value={harness.extraArgs.join(' ')}
+                  onChange={(e) =>
+                    setHarness((prev) => ({
+                      ...prev,
+                      extraArgs: e.target.value.trim()
+                        ? e.target.value.trim().split(/\s+/)
+                        : []
+                    }))
+                  }
+                  className="w-full bg-[#0f1a30] border border-[#2a2a4a] rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

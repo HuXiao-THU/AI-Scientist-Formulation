@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useTreeStore } from '../../store/useTreeStore'
 import { useUIStore } from '../../store/useUIStore'
+import { useExperimentStore } from '../../store/useExperimentStore'
 import type { AIConfig } from '@shared/types'
 
 export const NodeDetail: React.FC = () => {
@@ -18,8 +19,18 @@ export const NodeDetail: React.FC = () => {
 
   const [aiLoading, setAiLoading] = useState<'title' | 'summarize' | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [expError, setExpError] = useState<string | null>(null)
+
+  const activeExpNodeId = useExperimentStore((s) => s.activeNodeId)
+  const clearExpLogs = useExperimentStore((s) => s.clearLogs)
+  const filePath = useTreeStore((s) => s.filePath)
+  const setWorkspacePath = useTreeStore((s) => s.setWorkspacePath)
 
   if (!sidebarOpen || !node) return null
+
+  const isExperimentRunning =
+    node.type === 'experiment' &&
+    (node.runStatus === 'running' || activeExpNodeId === node.id)
 
   const isRoot = project?.rootNodeId === node.id
 
@@ -101,6 +112,54 @@ export const NodeDetail: React.FC = () => {
     }
   }
 
+  const handleRunExperiment = async () => {
+    if (node.type !== 'experiment' || !project) return
+    if (!window.electronAPI?.experiment) {
+      setExpError('Experiment API unavailable')
+      return
+    }
+    const desc = node.description.trim()
+    if (!desc) {
+      setExpError('Please enter an experiment description first')
+      return
+    }
+
+    setExpError(null)
+    clearExpLogs()
+    updateNode(node.id, { runStatus: 'running' })
+
+    if (!project.meta.workspacePath && filePath) {
+      const baseName = filePath.split(/[/\\]/).pop()?.replace(/\.ist$/i, '') ?? 'project'
+      setWorkspacePath(`${baseName}-workspace`)
+    }
+
+    try {
+      await window.electronAPI.experiment.run({
+        nodeId: node.id,
+        project: useTreeStore.getState().project!,
+        istFilePath: filePath
+      })
+    } catch (err) {
+      updateNode(node.id, { runStatus: 'failed' })
+      setExpError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleStopExperiment = async () => {
+    if (!window.electronAPI?.experiment) return
+    await window.electronAPI.experiment.stop(node.id)
+    updateNode(node.id, { runStatus: 'idle' })
+  }
+
+  const runStatusLabel =
+    node.runStatus === 'running'
+      ? 'Running'
+      : node.runStatus === 'done'
+        ? 'Done'
+        : node.runStatus === 'failed'
+          ? 'Failed'
+          : 'Idle'
+
   return (
     <div className="w-full min-w-0 h-full bg-white border-l border-gray-200 flex flex-col shadow-xl">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
@@ -178,13 +237,57 @@ export const NodeDetail: React.FC = () => {
         )}
 
         {node.type === 'experiment' && (
-          <div>
-            <button
-              disabled
-              className="w-full bg-gray-100 text-gray-500 rounded px-3 py-2 text-sm cursor-not-allowed border border-gray-200"
-            >
-              Run Experiment (coming soon)
-            </button>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-gray-600">
+              <span>Status</span>
+              <span
+                className={
+                  node.runStatus === 'running'
+                    ? 'text-amber-700 font-medium'
+                    : node.runStatus === 'done'
+                      ? 'text-green-700'
+                      : node.runStatus === 'failed'
+                        ? 'text-red-700'
+                        : 'text-gray-500'
+                }
+              >
+                {runStatusLabel}
+              </span>
+            </div>
+            {node.gitBranch && (
+              <div className="text-xs text-gray-500">
+                Branch: <code className="text-gray-700">{node.gitBranch}</code>
+              </div>
+            )}
+            {isExperimentRunning ? (
+              <button
+                onClick={handleStopExperiment}
+                className="w-full bg-red-50 hover:bg-red-100 text-red-800 rounded px-3 py-2 text-sm border border-red-200 transition-colors"
+              >
+                Stop Experiment
+              </button>
+            ) : (
+              <button
+                onClick={handleRunExperiment}
+                disabled={aiLoading !== null}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-amber-950 font-medium rounded px-3 py-2 text-sm transition-colors disabled:opacity-50"
+              >
+                Run Experiment
+              </button>
+            )}
+            {node.experimentResult && (
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Result</label>
+                <pre className="text-xs bg-gray-50 border border-gray-200 rounded p-2 whitespace-pre-wrap max-h-40 overflow-y-auto text-gray-800">
+                  {node.experimentResult}
+                </pre>
+              </div>
+            )}
+            {expError && (
+              <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5 border border-red-100">
+                {expError}
+              </div>
+            )}
           </div>
         )}
 

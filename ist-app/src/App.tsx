@@ -4,8 +4,10 @@ import { NodeDetail } from './components/Sidebar/NodeDetail'
 import { WelcomePage } from './components/Welcome/WelcomePage'
 import { AISettings } from './components/Settings/AISettings'
 import { DeleteConfirm } from './components/DeleteConfirm'
+import { LogPanel } from './components/Experiment/LogPanel'
 import { useTreeStore } from './store/useTreeStore'
 import { useUIStore } from './store/useUIStore'
+import { useExperimentStore } from './store/useExperimentStore'
 
 const App: React.FC = () => {
   const project = useTreeStore((s) => s.project)
@@ -50,6 +52,27 @@ const App: React.FC = () => {
     window.addEventListener('resize', clampSidebarWidth)
     return () => window.removeEventListener('resize', clampSidebarWidth)
   }, [sidebarOpen])
+
+  const handleExpEvent = useExperimentStore((s) => s.handleExpEvent)
+  const updateNode = useTreeStore((s) => s.updateNode)
+
+  useEffect(() => {
+    if (!window.electronAPI?.experiment?.onEvent) return
+    return window.electronAPI.experiment.onEvent((event) => {
+      handleExpEvent(event)
+      if (
+        (event.type === 'run_done' || event.type === 'run_failed') &&
+        event.result
+      ) {
+        const r = event.result
+        updateNode(r.nodeId, {
+          gitBranch: r.gitBranch,
+          experimentResult: r.experimentResult,
+          runStatus: r.runStatus
+        })
+      }
+    })
+  }, [handleExpEvent, updateNode])
 
   useEffect(() => {
     const tryRestoreLast = async () => {
@@ -220,12 +243,13 @@ const App: React.FC = () => {
           onClick={toggleSettings}
           className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
         >
-          AI Settings
+          Settings
         </button>
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
         <div className="flex-1 min-w-0 min-h-0">
           <Canvas />
         </div>
@@ -279,6 +303,8 @@ const App: React.FC = () => {
             </div>
           </>
         )}
+        </div>
+        <LogPanel />
       </div>
 
       {/* Modals */}

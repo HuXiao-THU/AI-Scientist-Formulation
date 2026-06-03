@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { registerFileHandlers } from './ipc/fileHandlers'
 import { registerAIHandlers } from './ipc/aiHandlers'
+import { registerExperimentHandlers } from './ipc/experimentHandlers'
 import { registerStoreHandlers } from './store'
 
 let mainWindow: BrowserWindow | null = null
@@ -40,6 +41,7 @@ function createWindow(): void {
 app.whenReady().then(() => {
   registerFileHandlers()
   registerAIHandlers()
+  registerExperimentHandlers()
   registerStoreHandlers()
   createWindow()
 

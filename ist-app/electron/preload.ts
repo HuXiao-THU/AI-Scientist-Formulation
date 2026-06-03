@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ISTProject, AIConfig } from '@shared/types'
+import type {
+  ISTProject,
+  AIConfig,
+  ExperimentEvent,
+  ExperimentRunRequest,
+  ExperimentRunResult,
+  HarnessConfig
+} from '@shared/types'
 
 const api = {
   file: {
@@ -23,6 +30,25 @@ const api = {
       ipcRenderer.invoke('store:get', key),
     set: (key: string, value: unknown): Promise<void> =>
       ipcRenderer.invoke('store:set', key, value)
+  },
+  experiment: {
+    run: (request: ExperimentRunRequest): Promise<ExperimentRunResult> =>
+      ipcRenderer.invoke('experiment:run', request),
+    stop: (nodeId: string): Promise<boolean> =>
+      ipcRenderer.invoke('experiment:stop', nodeId),
+    getHarnessConfig: (): Promise<HarnessConfig> =>
+      ipcRenderer.invoke('experiment:getHarnessConfig'),
+    setHarnessConfig: (config: HarnessConfig): Promise<void> =>
+      ipcRenderer.invoke('experiment:setHarnessConfig', config),
+    onEvent: (callback: (event: ExperimentEvent) => void): (() => void) => {
+      const listener = (_: Electron.IpcRendererEvent, event: ExperimentEvent): void => {
+        callback(event)
+      }
+      ipcRenderer.on('experiment:event', listener)
+      return () => {
+        ipcRenderer.removeListener('experiment:event', listener)
+      }
+    }
   }
 }
 

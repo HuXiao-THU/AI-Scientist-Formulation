@@ -11,6 +11,7 @@ import {
   updateNode,
   getPathToRoot,
   getSubtree,
+  getChildren,
 } from "./core/tree-model.js";
 import { runExperiment } from "./core/experiment.js";
 import type {
@@ -213,18 +214,21 @@ export function aiSummarize(state: AppState): void {
 
 /** Get flat list of visible node IDs for up/down navigation */
 export function getVisibleNodes(state: AppState): string[] {
-  const ids: string[] = [state.project.rootNodeId];
-  const stack = [state.project.rootNodeId];
-  while (stack.length > 0) {
-    const id = stack.pop()!;
-    const node = state.project.nodes[id];
-    if (!node) continue;
-    const children = [...node.childrenIds].reverse();
-    for (const childId of children) {
-      ids.push(childId);
-      stack.push(childId);
+  const ids: string[] = [];
+  const visited = new Set<string>();
+
+  function walk(nodeId: string): void {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
+    ids.push(nodeId);
+    // Sort children consistently with flattenTree (by creation time)
+    const children = getChildren(state.project, nodeId);
+    for (const child of children) {
+      walk(child.id);
     }
   }
+
+  walk(state.project.rootNodeId);
   return ids;
 }
 

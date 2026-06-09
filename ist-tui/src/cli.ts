@@ -59,88 +59,121 @@ if (args.length > 0) {
 const DETAIL_LINES = 6;
 
 function render(): void {
-  // Count lines from bottom up
-  let bottomLines = 0;
-  bottomLines += 1; // key hints (always)
-  if (editingField) bottomLines += 1; // editing bar
-  if (state.error) bottomLines += 1; // error
-  bottomLines += DETAIL_LINES; // detail
-  bottomLines += 1; // tree/detail separator
-
-  // Middle section: log panel or description preview
-  let logLines: string[] = [];
-  let middleLines = 0;
-  if (state.isRunning) {
-    const maxLog = Math.max(3, R - 22);
-    logLines = renderLogPanel(state.experimentLog, W).slice(0, maxLog);
-    middleLines = 1 + logLines.length; // separator + log
-  } else if (editingField === "description") {
-    middleLines = 8; // separator + preview header + 6 preview lines
-  }
-  bottomLines += middleLines;
-
-  const treeHeight = Math.max(5, R - 2 - bottomLines);
   const treeLines = renderTree(state.project, state.selectedId, W);
-  const visibleTree = treeLines.slice(0, treeHeight);
+  const selNode = state.selectedId ? state.project.nodes[state.selectedId] ?? null : null;
 
+  // Build fixed sections (bottom-up to determine remaining space)
+  const footer: string[] = [];
+  if (editingField) {
+    footer.push(theme.muted("  Enter/Esc confirm  Tab switch field  Backspace delete"));
+  } else {
+    footer.push(theme.muted("  ↑↓ nav  i idea  e exp  r run  s save  Tab edit  del  q quit"));
+  }
+
+  if (editingField === "title") {
+    const trimmed = editingValue.length > W - 20 ? editingValue.slice(-(W - 25)) + "…" : editingValue;
+    footer.unshift(theme.accent(`  Editing title: `) + trimmed);
+  } else if (editingField === "description") {
+    footer.unshift(theme.accent("  Editing description" + theme.muted("  [Enter] newline  [Esc/Ctrl+Enter] finish  [Tab] switch")));
+  }
+
+  if (state.error) footer.unshift(theme.failed(`  ${state.error}`));
+
+  // Middle section
+  const middle: string[] = [];
+  if (state.isRunning) {
+    middle.push(theme.muted("─".repeat(W)));
+    middle.push(...renderLogPanel(state.experimentLog, W));
+  } else if (editingField === "description") {
+    middle.push(theme.muted("─".repeat(W)));
+    middle.push(theme.accent("  Description preview:"));
+    const pv = editingValue.split("\n");
+    for (const pl of pv.slice(-6)) middle.push(theme.accent("  │ ") + pl);
+    for (let i = pv.length; i < 6; i++) middle.push(theme.accent("  │"));
+  }
+
+  // Detail (fixed 6 lines)
+  const detail: string[] = [];
+  const dl = renderNodeDetail(selNode, W, state.isRunning);
+  for (let i = 0; i < DETAIL_LINES; i++) detail.push(dl[i] ?? "");
+
+  // Calculate space for tree
+  const fixedBelow = detail.length + 1 + middle.length + footer.length; // +1 for detail sep
+  const headerLines = 2; // status + header sep
+  const available = R - headerLines - fixedBelow;
+  const treeToShow = Math.max(5, available);
+
+  // Build output
   let out = "\x1b[2J\x1b[H";
 
-  // ── Status ──
+  // Status
   const label = state.filePath ?? "Untitled";
   const dirty = state.isDirty ? " *" : "";
   const modelTag = theme.muted(` [${state.experimentConfig.provider}/${state.experimentConfig.model}]`);
   const runningTag = state.isRunning ? theme.running(" ⏳ Running...") : "";
-  out += `${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`;
-  out += " ".repeat(Math.max(0, W - label.length - dirty.length - 40)) + "\n";
+  out += clipLine(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W) + "\n";
   out += theme.muted("─".repeat(W)) + "\n";
 
-  // ── Tree ──
-  for (const line of visibleTree) out += line + "\n";
-  for (let i = visibleTree.length; i < treeHeight; i++) out += "\n";
+  // Tree (visible portion)
+  const visibleTree = treeLines.slice(0, treeToShow);
+  for (const line of visibleTree) out += clipLine(line, W) + "\n";
+  for (let i = visibleTree.length; i < treeToShow; i++) out += "\n";
 
-  // ── Detail separator ──
+  // Detail separator + detail
   out += theme.muted("─".repeat(W)) + "\n";
+  for (const line of detail) out += clipLine(line, W) + "\n";
 
-  // ── Detail ──
-  const selNode = state.selectedId ? state.project.nodes[state.selectedId] ?? null : null;
-  const dl = renderNodeDetail(selNode, W, state.isRunning);
-  for (let i = 0; i < DETAIL_LINES; i++) out += (dl[i] ?? "") + "\n";
+  // Middle
+  for (const line of middle) out += clipLine(line, W) + "\n";
 
-  // ── Middle section ──
-  if (state.isRunning) {
-    out += theme.muted("─".repeat(W)) + "\n";
-    for (const ll of logLines) out += ll + "\n";
-  } else if (editingField === "description") {
-    out += theme.muted("─".repeat(W)) + "\n";
-    out += theme.accent("  Description preview:") + "\n";
-    const previewLines = editingValue.split("\n");
-    for (const pl of previewLines.slice(-6)) {
-      out += theme.accent("  │ ") + pl + "\n";
-    }
-    for (let i = previewLines.length; i < 6; i++) out += theme.accent("  │") + "\n";
-  }
-
-  // ── Error ──
-  if (state.error) out += theme.failed(`  ${state.error}`) + "\n";
-
-  // ── Editing bar ──
-  if (editingField === "title") {
-    const trimmed = editingValue.length > W - 20
-      ? editingValue.slice(-(W - 25)) + "…"
-      : editingValue;
-    out += theme.accent(`  Editing title: `) + trimmed + "\n";
-  } else if (editingField === "description") {
-    out += theme.accent("  Editing description" + theme.muted("  [Enter] newline  [Esc/Ctrl+Enter] finish  [Tab] switch")) + "\n";
-  }
-
-  // ── Key hints ──
-  if (editingField) {
-    out += theme.muted("  Enter/Esc confirm  Tab switch field") + "\n";
-  } else {
-    out += theme.muted("  ↑↓ nav  i idea  e exp  r run  s save  Tab edit  del  q quit") + "\n";
-  }
+  // Footer
+  for (const line of footer) out += clipLine(line, W) + "\n";
 
   process.stdout.write(out);
+}
+
+/** Clip a line to visual width, preserving ANSI codes */
+function clipLine(s: string, maxW: number): string {
+  let out = "";
+  let vis = 0;
+  for (let i = 0; i < s.length && vis < maxW; i++) {
+    if (s[i] === "\x1b" && s.slice(i).match(/^\x1b\[[0-9;]*m/)) {
+      const m = s.slice(i).match(/^\x1b\[[0-9;]*m/)!;
+      out += m[0];
+      i += m[0].length - 1;
+      continue;
+    }
+    const cp = s.codePointAt(i) ?? 0;
+    vis += (cp > 127 && cp < 0x20000) || cp >= 0x20000 ? 2 : 1;
+    if (vis > maxW) break;
+    out += s[i];
+  }
+  return out;
+}
+
+/** Truncate to visual width, preserving ANSI codes */
+function truncateToVisualWidth(s: string, maxW: number): string {
+  const ansi = /\x1b\[[0-9;]*m/g;
+  let out = "";
+  let visW = 0;
+  let i = 0;
+  while (i < s.length) {
+    const rem = s.slice(i);
+    const m = rem.match(ansi);
+    if (m && m.index === 0) {
+      out += m[0];
+      i += m[0].length;
+      continue;
+    }
+    const ch = s[i];
+    const cp = ch.codePointAt(0) ?? 0;
+    const cw = (cp >= 0x1100 && cp <= 0xffff && cp > 127) || cp >= 0x20000 ? 2 : 1;
+    if (visW + cw > maxW) break;
+    out += ch;
+    visW += cw;
+    i++;
+  }
+  return out;
 }
 
 // ─── Keyboard ─────────────────────────────────────────────

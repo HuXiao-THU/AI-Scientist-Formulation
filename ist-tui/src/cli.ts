@@ -234,7 +234,7 @@ process.stdin.on("keypress", async (_str, key) => {
   // ── Normal mode ──
   switch (key.name) {
     case "q": {
-      if (key.ctrl) break;
+      if (key.ctrl) { cleanup(); return; }
       if (state.isDirty) {
         state.error = "Unsaved changes. Press Ctrl+Q to force quit, or s to save first.";
         render();
@@ -298,7 +298,6 @@ process.stdin.on("keypress", async (_str, key) => {
       break;
 
     default:
-      if (key.ctrl && (key.name === "q" || key.name === "c")) cleanup();
       break;
   }
 });

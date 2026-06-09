@@ -69,7 +69,7 @@ function resolveModel(config: ExperimentConfig): Model<any> {
     name: modelId,
     api: provider === "deepseek" ? "openai-completions" as any : "anthropic" as any,
     provider,
-    baseUrl: baseUrl ?? "https://api.deepseek.com/v1",
+    baseUrl: baseUrl ?? "https://api.deepseek.com",
     reasoning: modelId.includes("reasoner") || modelId.includes("r1"),
     input: ["text" as const],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

@@ -57,8 +57,8 @@ export function createAppState(): AppState {
     experimentLog: new ExperimentLog(),
     experimentConfig: {
       provider: "deepseek",
-      model: "deepseek-chat",
-      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-v4-pro",
+      baseUrl: "https://api.deepseek.com",
     },
     error: null,
     editing: null,

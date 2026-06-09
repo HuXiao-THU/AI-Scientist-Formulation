@@ -1,0 +1,170 @@
+import type { ISTNode, ISTProject } from "../core/types.js";
+import { getChildren, getPathToRoot } from "../core/tree-model.js";
+import { theme } from "./theme.js";
+import { truncateToWidth } from "../utils/truncate.js";
+
+/** A flattened node with display metadata */
+export interface FlatNode {
+  node: ISTNode;
+  indent: number;
+  isLast: boolean;
+  /** Stack of booleans: for each ancestor level, does the line continue? */
+  continues: boolean[];
+}
+
+/** Flatten the project tree for display. Selected node gets highlighted path. */
+export function flattenTree(
+  project: ISTProject,
+  selectedId: string | null
+): FlatNode[] {
+  const result: FlatNode[] = [];
+  const root = project.nodes[project.rootNodeId];
+  if (!root) return result;
+
+  // Build the set of ancestors for the selected node (for path highlighting)
+  const selectedPath = new Set<string>();
+  if (selectedId) {
+    const path = getPathToRoot(project, selectedId);
+    for (const n of path) selectedPath.add(n.id);
+  }
+
+  const stack: {
+    nodeId: string;
+    indent: number;
+    continues: boolean[];
+    isLast: boolean;
+  }[] = [];
+
+  // Push root's children in reverse order (so first child is processed first)
+  const rootChildren = getChildren(project, root.id);
+  for (let i = rootChildren.length - 1; i >= 0; i--) {
+    stack.push({
+      nodeId: rootChildren[i].id,
+      indent: 0,
+      continues: [],
+      isLast: i === rootChildren.length - 1,
+    });
+  }
+
+  while (stack.length > 0) {
+    const { nodeId, indent, continues, isLast } = stack.pop()!;
+    const node = project.nodes[nodeId];
+    if (!node) continue;
+
+    result.push({ node, indent, isLast, continues });
+
+    const children = getChildren(project, node.id);
+    if (children.length > 0) {
+      const newContinues = [...continues, !isLast];
+      for (let i = children.length - 1; i >= 0; i--) {
+        stack.push({
+          nodeId: children[i].id,
+          indent: indent + 1,
+          continues: newContinues,
+          isLast: i === children.length - 1,
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+/** Render the tree into lines */
+export function renderTree(
+  project: ISTProject,
+  selectedId: string | null,
+  width: number
+): string[] {
+  const flatNodes = flattenTree(project, selectedId);
+  const lines: string[] = [];
+
+  // Render root node first
+  const root = project.nodes[project.rootNodeId];
+  if (root) {
+    const isSelected = root.id === selectedId;
+    const line = renderNodeLine(root, isSelected, "", width);
+    lines.push(line);
+  }
+
+  for (const fn of flatNodes) {
+    const isSelected = fn.node.id === selectedId;
+    const prefix = buildTreePrefix(fn.indent, fn.isLast, fn.continues);
+    const line = renderNodeLine(fn.node, isSelected, prefix, width);
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+/** Build ASCII tree prefix like "  ├─ " or "  └─ " or "  │  " */
+function buildTreePrefix(
+  indent: number,
+  isLast: boolean,
+  continues: boolean[]
+): string {
+  if (indent === 0) return isLast ? "└─ " : "├─ ";
+
+  let prefix = "";
+  for (let i = 0; i < indent; i++) {
+    if (i < continues.length && continues[i]) {
+      prefix += "│  ";
+    } else {
+      prefix += "   ";
+    }
+  }
+  prefix += isLast ? "└─ " : "├─ ";
+  return prefix;
+}
+
+/** Render a single node line */
+function renderNodeLine(
+  node: ISTNode,
+  isSelected: boolean,
+  treePrefix: string,
+  width: number
+): string {
+  // Status icon
+  let statusIcon = "";
+  if (node.type === "experiment") {
+    switch (node.runStatus) {
+      case "running":
+        statusIcon = theme.running("◉");
+        break;
+      case "done":
+        statusIcon = theme.done("✓");
+        break;
+      case "failed":
+        statusIcon = theme.failed("✗");
+        break;
+      default:
+        statusIcon = theme.idle("○");
+    }
+  } else {
+    statusIcon = theme.idea("●");
+  }
+
+  // Type badge
+  const badge =
+    node.type === "idea" ? theme.badge.idea("[I]") : theme.badge.experiment("[E]");
+
+  // Title text
+  const title = node.title || "(untitled)";
+  const maxTitleWidth = Math.max(10, width - treePrefix.length - 12);
+  const truncatedTitle = truncateToWidth(title, maxTitleWidth);
+
+  // Build line
+  let line = `${treePrefix}${statusIcon} ${badge} ${truncatedTitle}`;
+
+  // Highlight selected
+  if (isSelected) {
+    line = theme.bg.selected(line) + " ←";
+  }
+
+  // Pad to width with spaces to clear previous content
+  while (line.replace(/\x1b\[[0-9;]*m/g, "").length < width) {
+    line += " ";
+  }
+
+  return line.slice(0, width * 3); // generous cap for ANSI codes
+}

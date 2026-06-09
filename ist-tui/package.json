@@ -1,0 +1,29 @@
+{
+  "name": "ist-tui",
+  "version": "0.1.0",
+  "description": "IST — Idea Search Tree. TUI-based autonomous research agent.",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "ist": "dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.79.0",
+    "@earendil-works/pi-ai": "^0.79.0",
+    "@earendil-works/pi-tui": "^0.79.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.22.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

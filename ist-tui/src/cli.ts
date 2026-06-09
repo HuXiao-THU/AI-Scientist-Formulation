@@ -59,25 +59,27 @@ if (args.length > 0) {
 const DETAIL_LINES = 6;
 
 function render(): void {
-  // Compute footer height (from bottom up)
-  let footer = 0;
-  footer += 1; // key hints
-  if (editingField) footer += 2; // edit bar + edit hints
-  if (state.error) footer += 1; // error
-  // detail area
-  footer += DETAIL_LINES;
-  footer += 1; // tree/detail separator
+  // Count lines from bottom up
+  let bottomLines = 0;
+  bottomLines += 1; // key hints (always)
+  if (editingField) bottomLines += 1; // editing bar
+  if (state.error) bottomLines += 1; // error
+  bottomLines += DETAIL_LINES; // detail
+  bottomLines += 1; // tree/detail separator
 
-  // log panel when running
+  // Middle section: log panel or description preview
   let logLines: string[] = [];
+  let middleLines = 0;
   if (state.isRunning) {
-    const maxLog = Math.max(4, R - 15);
-    logLines = renderLogPanel(state.experimentLog, W);
-    logLines = logLines.slice(0, maxLog);
-    footer += 1 + logLines.length; // separator + log lines
+    const maxLog = Math.max(3, R - 22);
+    logLines = renderLogPanel(state.experimentLog, W).slice(0, maxLog);
+    middleLines = 1 + logLines.length; // separator + log
+  } else if (editingField === "description") {
+    middleLines = 8; // separator + preview header + 6 preview lines
   }
+  bottomLines += middleLines;
 
-  const treeHeight = Math.max(5, R - 2 - footer); // -2 for status bar + separator
+  const treeHeight = Math.max(5, R - 2 - bottomLines);
   const treeLines = renderTree(state.project, state.selectedId, W);
   const visibleTree = treeLines.slice(0, treeHeight);
 
@@ -104,26 +106,39 @@ function render(): void {
   const dl = renderNodeDetail(selNode, W, state.isRunning);
   for (let i = 0; i < DETAIL_LINES; i++) out += (dl[i] ?? "") + "\n";
 
-  // ── Log ──
+  // ── Middle section ──
   if (state.isRunning) {
     out += theme.muted("─".repeat(W)) + "\n";
     for (const ll of logLines) out += ll + "\n";
+  } else if (editingField === "description") {
+    out += theme.muted("─".repeat(W)) + "\n";
+    out += theme.accent("  Description preview:") + "\n";
+    const previewLines = editingValue.split("\n");
+    for (const pl of previewLines.slice(-6)) {
+      out += theme.accent("  │ ") + pl + "\n";
+    }
+    for (let i = previewLines.length; i < 6; i++) out += theme.accent("  │") + "\n";
   }
 
   // ── Error ──
   if (state.error) out += theme.failed(`  ${state.error}`) + "\n";
 
-  // ── Editing ──
-  if (editingField) {
+  // ── Editing bar ──
+  if (editingField === "title") {
     const trimmed = editingValue.length > W - 20
       ? editingValue.slice(-(W - 25)) + "…"
       : editingValue;
-    out += theme.accent(`  Editing ${editingField}: `) + trimmed + "\n";
-    out += theme.muted("  [Enter] confirm  [Esc] cancel  [Tab] switch field") + "\n";
+    out += theme.accent(`  Editing title: `) + trimmed + "\n";
+  } else if (editingField === "description") {
+    out += theme.accent("  Editing description" + theme.muted("  [Enter] newline  [Esc/Ctrl+Enter] finish  [Tab] switch")) + "\n";
   }
 
   // ── Key hints ──
-  out += theme.muted("  ↑↓ nav  i idea  e exp  r run  s save  Tab edit  del  q quit") + "\n";
+  if (editingField) {
+    out += theme.muted("  Enter/Esc confirm  Tab switch field") + "\n";
+  } else {
+    out += theme.muted("  ↑↓ nav  i idea  e exp  r run  s save  Tab edit  del  q quit") + "\n";
+  }
 
   process.stdout.write(out);
 }
@@ -140,33 +155,41 @@ process.stdin.on("keypress", async (_str, key) => {
     switch (key.name) {
       case "return":
       case "enter":
+        if (key.ctrl) {
+          // Ctrl+Enter = confirm (useful for description)
+          if (node) {
+            if (editingField === "title") updateSelectedTitle(state, editingValue);
+            else updateSelectedDescription(state, editingValue);
+          }
+          editingField = null; editingValue = ""; render(); return;
+        }
+        if (editingField === "description") {
+          // Enter in description mode = insert newline
+          editingValue += "\n";
+          render(); return;
+        }
+        // Enter in title mode = confirm
+        if (node) updateSelectedTitle(state, editingValue);
+        editingField = null; editingValue = ""; render(); return;
+      case "escape":
+        // Escape = confirm and save (don't discard)
         if (node) {
           if (editingField === "title") updateSelectedTitle(state, editingValue);
           else updateSelectedDescription(state, editingValue);
         }
-        editingField = null;
-        editingValue = "";
-        render();
-        return;
-      case "escape":
-        editingField = null;
-        editingValue = "";
-        render();
-        return;
+        editingField = null; editingValue = ""; render(); return;
       case "tab":
-        if (editingField === "title") {
-          editingField = "description";
-          editingValue = node?.description ?? "";
+        if (editingField === "title" && node) {
+          updateSelectedTitle(state, editingValue);
+          editingField = "description"; editingValue = node.description;
         } else {
-          editingField = null;
-          editingValue = "";
+          if (node && editingField === "description") updateSelectedDescription(state, editingValue);
+          editingField = null; editingValue = "";
         }
-        render();
-        return;
+        render(); return;
       case "backspace":
         editingValue = editingValue.slice(0, -1);
-        render();
-        return;
+        render(); return;
       default:
         if (key.sequence && key.sequence.length === 1 && key.sequence >= " ") {
           editingValue += key.sequence;

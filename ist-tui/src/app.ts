@@ -170,6 +170,9 @@ export async function startExperiment(
   state.experimentLog.clear();
   state.error = null;
 
+  // Mark node as running immediately
+  updateNode(state.project, node.id, { runStatus: "running" });
+
   const controller = new AbortController();
   (state as any)._abortController = controller;
 

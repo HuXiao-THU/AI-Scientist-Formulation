@@ -6,3 +6,6 @@ dist/
 __pycache__/
 *.egg-info/
 .env
+*-workspace/
+*.ist
+cal_housing_logit/

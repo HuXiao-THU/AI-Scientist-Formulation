@@ -1,7 +1,7 @@
 import type { ISTNode, ISTProject } from "../core/types.js";
 import { getChildren, getPathToRoot } from "../core/tree-model.js";
 import { theme } from "./theme.js";
-import { truncateToWidth } from "../utils/truncate.js";
+import { truncateToWidth, padToWidth, visualWidth } from "../utils/truncate.js";
 
 /** A flattened node with display metadata */
 export interface FlatNode {
@@ -152,7 +152,10 @@ function renderNodeLine(
 
   // Title text — dim non-path nodes
   const title = node.title || "(untitled)";
-  const maxTitleWidth = Math.max(10, width - treePrefix.length - 12);
+  // Reserve space for prefix + icon + badge + margins
+  const prefixVisualWidth = visualWidth(treePrefix);
+  const reserved = prefixVisualWidth + 7; // icon(2) + space + badge(4) + margin
+  const maxTitleWidth = Math.max(10, width - reserved);
   const truncatedTitle = truncateToWidth(title, maxTitleWidth);
   const displayTitle = onPath ? truncatedTitle : theme.muted(truncatedTitle);
 
@@ -164,10 +167,7 @@ function renderNodeLine(
     line = theme.bg.selected(line) + " ←";
   }
 
-  // Pad to width with spaces to clear previous content
-  while (line.replace(/\x1b\[[0-9;]*m/g, "").length < width) {
-    line += " ";
-  }
-
-  return line.slice(0, width * 3); // generous cap for ANSI codes
+  // Pad to target visual width
+  line = padToWidth(line, width);
+  return line;
 }

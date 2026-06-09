@@ -8,6 +8,9 @@ export class ExperimentLog {
   private maxEntries = 500;
 
   append(event: ExperimentLogEvent): void {
+    // Skip exact duplicate consecutive messages
+    const last = this.entries[this.entries.length - 1];
+    if (last && last.type === event.type && last.message === event.message) return;
     this.entries.push(event);
     if (this.entries.length > this.maxEntries) {
       this.entries = this.entries.slice(-this.maxEntries);

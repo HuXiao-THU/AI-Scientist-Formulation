@@ -35,6 +35,7 @@ let editingField: "title" | "description" | null = null;
 let editingValue = "";
 let cursorPos = 0;
 let viewMode: "tree" | "result" = "tree";
+let resultScroll = 0;
 
 const args = process.argv.slice(2);
 let cliFilePath: string | null = null;
@@ -135,14 +136,23 @@ function render(): void {
     rows.push(theme.muted("─".repeat(W)));
     if (selNode) {
       rows.push(`  ${theme.bold("Experiment:")} ${selNode.title || "(untitled)"}`);
-      rows.push("");
       const mdLines = renderMarkdown(selNode.experimentResult || "(no result)", W);
-      for (const l of mdLines) rows.push(clipToWidth(l, W));
+      const contentH = R - 1 - 3 - 2; // -header(3) -footer(2)
+      const maxScroll = Math.max(0, mdLines.length - contentH);
+      resultScroll = Math.max(0, Math.min(resultScroll, maxScroll));
+      const visible = mdLines.slice(resultScroll, resultScroll + contentH);
+      for (const l of visible) rows.push(clipToWidth(l, W));
+      while (rows.length < 3 + contentH) rows.push("");
+      if (maxScroll > 0) {
+        const pct = Math.round((resultScroll / maxScroll) * 100);
+        rows.push(theme.muted(`  ${resultScroll + 1}-${resultScroll + visible.length} / ${mdLines.length} lines (${pct}%)`));
+      } else {
+        rows.push("");
+      }
     } else {
       rows.push(theme.muted("  No experiment selected."));
     }
-    rows.push("");
-    rows.push(theme.muted("  [Esc] back to tree  [↑↓] scroll (not yet)  [q] quit"));
+    rows.push(theme.muted("  [↑↓] scroll  [Esc] back to tree  [q] quit"));
     process.stdout.write("\x1b[2J\x1b[H" + rows.slice(0, R - 1).join("\n"));
     return;
   }
@@ -321,6 +331,18 @@ process.stdin.on("keypress", async (_str, key) => {
   }
 
   // ── Normal mode ──
+  if (viewMode === "result") {
+    switch (key.name) {
+      case "up":    resultScroll = Math.max(0, resultScroll - 1); render(); return;
+      case "down":  resultScroll++; render(); return;
+      case "escape": viewMode = "tree"; resultScroll = 0; render(); return;
+      case "q":
+        if (key.ctrl) { cleanup(); return; }
+        cleanup(); return;
+    }
+    return;
+  }
+
   switch (key.name) {
     case "q": {
       if (key.ctrl) { cleanup(); return; }
@@ -361,8 +383,7 @@ process.stdin.on("keypress", async (_str, key) => {
       }
       break;
     case "escape":
-      if (viewMode === "result") { viewMode = "tree"; render(); }
-      else { selectNode(state, null); render(); }
+      selectNode(state, null); render();
       break;
     case "m":
       if (!state.isRunning && state.selectedId) {

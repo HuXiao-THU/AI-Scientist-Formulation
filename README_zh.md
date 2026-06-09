@@ -1,175 +1,156 @@
-# AI-Scientist-Formulation
+# IST — Idea Search Tree（灵感搜索树）
 
-一个基于 GUI 的实验验证应用，用于验证 **上下文约束树搜索（Context-Constrained Tree Search, CCTS）** 框架。该框架将 AI Agent 的自主科研过程建模为 LLM 上下文窗口约束下的树搜索问题。
+**TUI 原生的自主 AI 科研智能体。** IST 将科研过程建模为一棵由灵感和实验组成的树，每个实验节点交由 LLM 驱动的 Agent 来编写代码、执行分析、汇报结果——所有这些都在一个键盘驱动的终端界面中完成。
 
-当前版本为 **Phase 1 MVP**，聚焦于交通预测实验场景，使用模拟（mock）执行。
+## 设计理念
 
-## 架构概览
+人类研究者通过**试错**来探索科研问题——提出假设、执行实验、分析结果、产生新的分支方向。IST 复现了这一过程：
+
+- **灵感节点（Idea）** 构成一棵树。每个灵感可以派生子灵感或具体的实验。
+- **实验节点（Experiment）** 由 AI Agent 执行，编写代码、运行分析、总结发现。
+- **实验结果** 沿树向上汇聚，为下一步的分支决策提供依据。
+
+IST 探索的核心研究问题是：**在 LLM 上下文窗口有限的约束下，树节点之间需要对信息进行压缩传递，哪些科研问题可解，哪些还需要工程突破？**
+
+## 架构
 
 ```
-app/
-├── backend/    # FastAPI REST API + CCTS 领域逻辑 (Python ≥ 3.11)
-├── frontend/   # React + Vite 单页仪表盘 (Node.js)
-└── worker/     # 命令行工具，通过 HTTP 推进实验一步
+ist-tui/
+└── src/
+    ├── cli.ts              # TUI 主循环 + 键盘输入
+    ├── app.ts              # 应用状态机
+    ├── core/
+    │   ├── types.ts        # IST 数据模型
+    │   ├── ist-file.ts     # .ist 文件持久化
+    │   ├── tree-model.ts   # 树 CRUD 操作
+    │   └── experiment.ts   # Agent 实验执行器
+    ├── tui/
+    │   ├── tree-view.ts    # ASCII 树形渲染
+    │   ├── node-detail.ts  # 节点详情面板
+    │   └── log-panel.ts    # 实验日志面板
+    └── utils/
+        └── truncate.ts     # 文本工具
 ```
 
-| 层级 | 技术栈 | 存储方式 |
-| ---- | ------ | ------- |
-| 后端 | FastAPI, Pydantic v2, Uvicorn | 内存 (dict) |
-| 前端 | React 19, Vite 7 | — |
-| Worker | Python + httpx | — |
+### 技术栈
 
-## 功能特性
+| 层 | 技术 |
+|---|------|
+| TUI 渲染 | 终端 ANSI 转义码 |
+| Agent 框架 | [`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi) |
+| LLM 抽象 | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) |
+| 运行时 | Node.js ≥ 22, TypeScript |
 
-- **CCTS 公式引擎** — 计算深度上界 `d*`、历史上下文 `c_hist`、工作上下文 `c_work`，以及可行性判断。
-- **Run 管理** — 创建预测实验 Run，可配置 `context_window`（上下文窗口）、`alpha`（压缩比）、`static_cost`（静态开销）、`task_cost`（任务需求）、`delta_i`（信息增量）。
-- **模拟实验步进** — 每次点击 "Advance" 模拟一个实验节点，生成随机 MAE 结果，自动检测上下文预算是否耗尽。
-- **实时仪表盘** — 表格视图展示状态、深度进度、`c_hist` / `c_work` 变化，每 3 秒自动刷新。
-- **事件流** — 基于轮询的事件 API（`GET /api/runs/{id}/events?since=`），追踪 Run 生命周期事件。
+### 为什么选择 TUI 而非 GUI？
 
-## 环境要求
-
-- **Python** ≥ 3.11
-- **Node.js** ≥ 18（附带 npm）
+最初的 Electron GUI 版本遇到了原生层崩溃问题（Node.js buffer assertion failure）。切换到纯终端 TUI 后，彻底消除了进程隔离、IPC 序列化和原生 UI 框架依赖——Agent 在进程内直接运行，事件流畅通无阻。
 
 ## 快速开始
 
-### 1. 启动后端
+### 环境要求
+
+- **Node.js** ≥ 22
+- Anthropic API Key（在环境变量中设置 `ANTHROPIC_API_KEY`）
+
+### 安装与运行
 
 ```bash
-cd app/backend
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-uvicorn ccts_backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-API 已在 `http://127.0.0.1:8000` 启动。验证方法：
-
-```bash
-curl http://127.0.0.1:8000/health
-# {"status":"ok"}
-```
-
-### 2. 启动前端
-
-打开新终端：
-
-```bash
-cd app/frontend
+cd ist-tui
 npm install
 npm run dev
 ```
 
-在浏览器中打开 `http://localhost:4173` 即可访问仪表盘。
-
-> 如需连接不同的后端地址，在启动前设置 `VITE_API_BASE_URL` 环境变量：
->
-> ```bash
-> VITE_API_BASE_URL=http://your-host:8000 npm run dev
-> ```
-
-### 3. 使用仪表盘
-
-1. **创建 Run** — 设置 `Context Window`（如 32000）和 `Alpha`（如 10），点击 **Create Prediction Run**。
-2. **推进实验** — 点击 **Advance** 按钮模拟一次实验步进。每步会计算新的 `c_hist` 和 `c_work`，并生成模拟的 MAE 结果。
-3. **观察变化** — 观察深度 / 预测最大深度的比值、`c_hist` 逐步增长、`c_work` 逐步缩减的过程。
-4. Run 将以 `completed`（MAE ≤ 4.0，实验成功）或 `failed`（上下文预算耗尽，即 `c_work < D`）状态终止。
-
-### 4.（可选）使用 Worker 命令行
-
-Worker 可以从命令行推进一个 Run 一步：
+或打开已有的 `.ist` 工程：
 
 ```bash
-cd app/worker
-pip install -e .
-python -m ccts_worker.worker_main --run-id <RUN_ID>
+npm run dev -- /path/to/project.ist
 ```
 
-它会调用 `POST /api/runs/{run_id}/steps/mock` 并将 JSON 事件输出到 stdout。使用 `--api-base` 指定非默认的后端地址。
+### 键盘操作
 
-## API 参考
+| 键 | 功能 |
+|----|------|
+| `↑` `↓` | 导航树节点 |
+| `i` | 添加灵感子节点 |
+| `e` | 添加实验子节点 |
+| `r` | 运行实验（需选中实验节点） |
+| `s` | 保存工程 |
+| `Tab` | 编辑标题 |
+| `Del` | 删除节点 |
+| `q` | 退出 |
 
-| 方法 | 端点 | 说明 |
-| ---- | ---- | ---- |
-| GET | `/health` | 健康检查 |
-| POST | `/api/runs` | 创建新 Run |
-| GET | `/api/runs` | 列出所有 Run |
-| GET | `/api/runs/{run_id}` | 获取 Run 详情（含所有节点） |
-| POST | `/api/runs/{run_id}/steps/mock` | 推进 Run 一步（模拟） |
-| GET | `/api/runs/{run_id}/events?since=N` | 从偏移量 `N` 轮询 Run 事件 |
+## 工作流程
 
-### 创建 Run 请求体
+### 1. 构建研究树
 
-```json
-{
-  "problem_type": "prediction",
-  "context_window": 32000,
-  "alpha": 10.0,
-  "static_cost": 3500,
-  "task_cost": 8600,
-  "delta_i": 50,
-  "summary_mode": "structured"
-}
+从一个根灵感开始，逐步分支出研究树：
+
+```
+● [I] 加州房价预测                              ← 根灵感
+├─ ● [I] 线性回归基线
+│  └─ ○ [E] 运行线性回归                          ← 实验
+├─ ● [I] 随机森林对比
+│  └─ ○ [E] 运行随机森林
+└─ ● [I] 梯度提升方法
+   ├─ ○ [E] 运行 XGBoost
+   └─ ○ [E] 运行 LightGBM
 ```
 
-所有字段均有默认值，其中 `context_window` 和 `alpha` 是实验的主要调节参数。
+- `●` 黄色 = 灵感节点
+- `○` 灰色 = 实验节点
+- `✓` 绿色 = 实验成功
+- `✗` 红色 = 实验失败
 
-| 参数 | 含义 | 默认值 |
-| ---- | ---- | ----- |
-| `problem_type` | 问题类型（当前仅支持 `prediction`） | `"prediction"` |
-| `context_window` | LLM 上下文窗口大小（tokens） | `32000` |
-| `alpha` | 压缩比（理想=1，实际 LLM 摘要 ≈ 8–16） | `10.0` |
-| `static_cost` | 静态开销 $S$（系统提示 + 问题描述） | `3500` |
-| `task_cost` | 任务需求 $D$（代码 + 环境 + 推理 + 输出） | `8600` |
-| `delta_i` | 平均信息增量 $\overline{\Delta I}$ | `50` |
-| `summary_mode` | 摘要模式 | `"structured"` |
+### 2. 运行实验
 
-## 运行测试
+选中实验节点，按 `r`。IST 会：
+1. 从根节点到当前节点的完整路径构建 system prompt
+2. 创建 pi Agent 并配备代码执行工具
+3. Agent 编写代码、运行分析、汇总结果
+4. 右侧日志面板实时流式展示进度
+5. 实验结果回写到节点并保存至 `.ist` 文件
 
-```bash
-cd app/backend
-pip install -e ".[dev]"
-pytest -q
-```
+### 3. 迭代和分支
 
-## CCTS 模型简介
+查看实验结果，添加新的灵感和实验，继续探索。整棵研究树保留了完整的研究轨迹，便于后续分析。
 
-核心公式计算 AI Agent 在给定上下文窗口下能执行的最大连续实验次数（研究深度）：
+## CCTS 模型（研究背景）
+
+IST 基于**上下文约束树搜索（CCTS）**框架，该框架将 AI 自主科研形式化为 LLM 上下文窗口限制下的树搜索问题：
 
 $$d^* = \left\lfloor \frac{C - S - D}{\alpha \cdot \overline{\Delta I}} \right\rfloor$$
 
 其中：
 - **$C$** — 上下文窗口总大小（tokens）
-- **$S$** — 静态开销（系统提示 + 问题描述），理解问题的"入场费"
-- **$D$** — 任务需求（代码 + 环境 + 推理 + 输出），执行一次实验的"工作台大小"
+- **$S$** — 静态开销（系统提示 + 问题描述）
+- **$D$** — 每次实验的任务需求（代码 + 环境 + 推理 + 输出）
 - **$\overline{\Delta I}$** — 每次实验的平均信息增量
-- **$\alpha$** — 压缩比（理想压缩=1，实际 LLM 摘要 ≈ 8–16）
+- **$\alpha$** — 压缩比（理想 = 1，实际 LLM 摘要 ≈ 8–16）
 
-**可解性条件**：当 $d^* \geq k^*$（$k^*$ 为解决问题所需的最少实验次数）时，问题在当前上下文窗口下可解。
+**可解性条件**：当 $d^* \geq k^*$（$k^*$ 为解决问题所需的最少实验次数）时，问题在当前上下文窗口 $C$ 下可解。
 
-详见 [research_plan.md](research_plan.md) 中的完整形式化框架。
+详见 [idea.md](idea.md) 中的原始研究构想。
 
 ## 项目进度
 
-当前为 **Phase 1 MVP**。已完成：
+- [x] TUI 树形导航与编辑
+- [x] Agent harness 集成（pi-agent-core）
+- [x] 实验执行与流式日志
+- [x] `.ist` 文件持久化
+- [ ] 内置工具注册（bash, read, write）
+- [ ] 每个实验独立 Git 分支
+- [ ] 灵感节点 AI 摘要
+- [ ] Session 持久化（JSONL）
+- [ ] CCTS 上下文预算追踪
+- [ ] 多 LLM 提供商支持
 
-- [x] CCTS 公式引擎（`d*`、`c_hist`、`c_work`、可行性判断）
-- [x] 后端 REST API（内存存储）
-- [x] 前端 Run 概览仪表盘
-- [x] 模拟实验步进与上下文预算追踪
-- [x] 后端单元测试
+## 分支
 
-待实现：
-
-- [ ] 持久化数据库（PostgreSQL）
-- [ ] 真实 LLM 集成与交通预测模型
-- [ ] 研究树可视化浏览器
-- [ ] SSE / WebSocket 实时推送
-- [ ] 更多问题类型（网络均衡分析、信号灯优化）
-- [ ] 压缩比 $\alpha$ 实测实验
-- [ ] Docker / Compose 部署方案
-- [ ] CI/CD 流水线
+| 分支 | 说明 |
+|------|------|
+| `main` | 稳定基线 |
+| `TUI` | 活跃开发 — TUI 原生 IST |
+| `GUI` | 归档 — 基于 Electron 的 GUI 版本 |
 
 ## 许可证
 

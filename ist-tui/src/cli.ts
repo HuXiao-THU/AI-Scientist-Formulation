@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { loadEnv } from "./core/env.js";
+loadEnv(); // Load .env before anything else
+
 import * as readline from "node:readline";
 import * as path from "node:path";
 import {

@@ -57,8 +57,8 @@ export function createAppState(): AppState {
     experimentLog: new ExperimentLog(),
     experimentConfig: {
       provider: "deepseek",
-      model: "deepseek-v4-pro",
-      baseUrl: "https://api.deepseek.com",
+      model: process.env.IST_MODEL || "deepseek-v4-pro",
+      baseUrl: process.env.IST_BASE_URL || "https://api.deepseek.com",
     },
     error: null,
     editing: null,

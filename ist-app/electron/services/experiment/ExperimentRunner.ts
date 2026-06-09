@@ -4,7 +4,7 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import type {
   ExperimentEvent,
-  ExperimentRunRequest,
+  ExperimentRunContext,
   ExperimentRunResult,
   HarnessConfig,
   ISTNode,
@@ -13,8 +13,37 @@ import type {
 import { DEFAULT_HARNESS_CONFIG } from '@shared/types'
 import { GitService } from '../git/GitService'
 import { ensureWorkspace } from '../workspace/workspaceService'
+import { safeErrorMessage, truncateText } from '../../utils/truncate'
 
 type EventCallback = (event: ExperimentEvent) => void
+
+const MAX_LOG_MESSAGE_LEN = 400
+const MAX_ERROR_LEN = 500
+const MAX_STDOUT_LINE = 64 * 1024
+const MAX_IPC_RESULT_LEN = 900
+const LOG_THROTTLE_MS = 250
+
+function cleanSpawnEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+  delete env.ELECTRON_NO_ATTACH_CONSOLE
+  return env
+}
+
+function emitLog(
+  onEvent: EventCallback,
+  runId: string,
+  nodeId: string,
+  message: string
+): void {
+  onEvent({
+    type: 'log',
+    runId,
+    nodeId,
+    timestamp: new Date().toISOString(),
+    message: truncateText(message, MAX_LOG_MESSAGE_LEN)
+  })
+}
 
 function shortNodeId(nodeId: string): string {
   return nodeId.replace(/-/g, '').slice(0, 8)
@@ -150,7 +179,7 @@ export class ExperimentRunner {
   }
 
   async run(
-    request: ExperimentRunRequest,
+    request: ExperimentRunContext,
     harnessConfig: HarnessConfig,
     onEvent: EventCallback
   ): Promise<ExperimentRunResult> {
@@ -193,6 +222,31 @@ export class ExperimentRunner {
     const stdoutLogPath = join(runDir, 'stdout.jsonl')
     const logLines: string[] = []
     let lastAssistantText = ''
+    let pendingLog: string | null = null
+    let logFlushTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flushPendingLog = (): void => {
+      if (logFlushTimer) {
+        clearTimeout(logFlushTimer)
+        logFlushTimer = null
+      }
+      if (pendingLog) {
+        emitLog(onEvent, runId, nodeId, pendingLog)
+        pendingLog = null
+      }
+    }
+
+    const scheduleLog = (message: string): void => {
+      pendingLog = message
+      if (logFlushTimer) return
+      logFlushTimer = setTimeout(() => {
+        logFlushTimer = null
+        if (pendingLog) {
+          emitLog(onEvent, runId, nodeId, pendingLog)
+          pendingLog = null
+        }
+      }, LOG_THROTTLE_MS)
+    }
 
     return new Promise<ExperimentRunResult>((resolve) => {
       let proc: ChildProcessWithoutNullStreams
@@ -200,10 +254,11 @@ export class ExperimentRunner {
         proc = spawn(command[0], command.slice(1), {
           cwd: workspacePath,
           stdio: ['pipe', 'pipe', 'pipe'],
-          env: { ...process.env }
+          shell: false,
+          env: cleanSpawnEnv()
         })
       } catch (err) {
-        const error = err instanceof Error ? err.message : String(err)
+        const error = safeErrorMessage(err, MAX_ERROR_LEN)
         const result: ExperimentRunResult = {
           runId,
           nodeId,
@@ -219,6 +274,12 @@ export class ExperimentRunner {
       }
 
       this.activeRuns.set(runId, proc)
+
+      // Prevent EPIPE crash when child exits before stdin is flushed
+      proc.stdin.on('error', () => {
+        // Ignore stdin errors — the close/error handler will deal with the process result
+      })
+
       proc.stdin.write(prompt)
       proc.stdin.end()
 
@@ -235,73 +296,90 @@ export class ExperimentRunner {
         for (const rawLine of parts) {
           const line = rawLine.trim()
           if (!line) continue
+          if (line.length > MAX_STDOUT_LINE) {
+            appendFileSync(
+              stdoutLogPath,
+              `${line.slice(0, MAX_STDOUT_LINE)}...[truncated]\n`
+            )
+            scheduleLog('[Claude output line truncated]')
+            continue
+          }
           appendFileSync(stdoutLogPath, `${line}\n`)
           let payload: Record<string, unknown>
           try {
             payload = JSON.parse(line) as Record<string, unknown>
           } catch {
-            payload = { raw: line }
+            scheduleLog('[non-json stdout line]')
+            continue
           }
           const extracted = extractTextFromStreamEvent(payload)
           if (extracted) {
             lastAssistantText = extracted
             logLines.push(extracted)
-            onEvent({
-              type: 'log',
-              runId,
-              nodeId,
-              timestamp: timestamp(),
-              message: extracted
-            })
-          } else if (payload.raw) {
-            onEvent({
-              type: 'log',
-              runId,
-              nodeId,
-              timestamp: timestamp(),
-              message: String(payload.raw)
-            })
+            scheduleLog(extracted)
           }
         }
       })
 
       proc.on('close', async (code) => {
-        this.activeRuns.delete(runId)
-        const stderrText = stderrChunks.join('').trim()
-        if (stderrText) {
-          writeFileSync(join(runDir, 'stderr.txt'), stderrText, 'utf-8')
+        try {
+          flushPendingLog()
+          this.activeRuns.delete(runId)
+          const stderrText = stderrChunks.join('').trim()
+          if (stderrText) {
+            writeFileSync(join(runDir, 'stderr.txt'), stderrText, 'utf-8')
+          }
+
+          const committed = await git.commitAll(`experiment: ${node.title || nodeId}`)
+          const summary =
+            lastAssistantText ||
+            logLines[logLines.length - 1] ||
+            (code === 0 ? 'Experiment completed.' : stderrText || 'Experiment failed.')
+
+          const success = code === 0
+          const fullSummary = summary.slice(0, 8000)
+          const result: ExperimentRunResult = {
+            runId,
+            nodeId,
+            success,
+            gitBranch: branch,
+            experimentResult: truncateText(fullSummary, MAX_IPC_RESULT_LEN),
+            runStatus: success ? 'done' : 'failed',
+            error: success
+              ? undefined
+              : truncateText(stderrText || `Process exited with code ${code}`, MAX_ERROR_LEN)
+          }
+
+          writeFileSync(
+            join(runDir, 'result.json'),
+            JSON.stringify(
+              { ...result, experimentResult: fullSummary, exitCode: code, committed },
+              null,
+              2
+            )
+          )
+
+          onEvent({
+            type: success ? 'run_done' : 'run_failed',
+            runId,
+            nodeId,
+            timestamp: timestamp(),
+            result
+          })
+          resolve(result)
+        } catch (err) {
+          const result: ExperimentRunResult = {
+            runId,
+            nodeId,
+            success: false,
+            gitBranch: branch,
+            experimentResult: '',
+            runStatus: 'failed',
+            error: safeErrorMessage(err, MAX_ERROR_LEN)
+          }
+          onEvent({ type: 'run_failed', runId, nodeId, timestamp: timestamp(), result })
+          resolve(result)
         }
-
-        const committed = await git.commitAll(`experiment: ${node.title || nodeId}`)
-        const summary =
-          lastAssistantText ||
-          logLines[logLines.length - 1] ||
-          (code === 0 ? 'Experiment completed.' : stderrText || 'Experiment failed.')
-
-        const success = code === 0
-        const result: ExperimentRunResult = {
-          runId,
-          nodeId,
-          success,
-          gitBranch: branch,
-          experimentResult: summary.slice(0, 8000),
-          runStatus: success ? 'done' : 'failed',
-          error: success ? undefined : stderrText || `Process exited with code ${code}`
-        }
-
-        writeFileSync(
-          join(runDir, 'result.json'),
-          JSON.stringify({ ...result, exitCode: code, committed }, null, 2)
-        )
-
-        onEvent({
-          type: success ? 'run_done' : 'run_failed',
-          runId,
-          nodeId,
-          timestamp: timestamp(),
-          result
-        })
-        resolve(result)
       })
 
       proc.on('error', async (err) => {
@@ -313,7 +391,7 @@ export class ExperimentRunner {
           gitBranch: branch,
           experimentResult: '',
           runStatus: 'failed',
-          error: err.message
+          error: safeErrorMessage(err, MAX_ERROR_LEN)
         }
         onEvent({ type: 'run_failed', runId, nodeId, timestamp: timestamp(), result })
         resolve(result)

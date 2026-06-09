@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude --version)",
+      "Bash(claude -p --input-format text --output-format stream-json --verbose --no-session-persistence --permission-mode bypassPermissions)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

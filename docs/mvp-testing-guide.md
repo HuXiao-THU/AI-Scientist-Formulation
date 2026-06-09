@@ -44,16 +44,18 @@ npm run dev
 2. 画布上出现一个空的根节点（黄色，灵感节点）
 
 **验证点**：
+
 - [ ] 画布正常渲染，根节点为黄色
 - [ ] 根节点没有标题文本
 
 ### 1.2 编辑根节点
 
 1. 点击根节点 → 右侧弹出信息栏（Node Details）
-2. 在 **Title** 输入：`California Housing Price Prediction`
-3. 在 **Description** 输入：`Explore methods to predict median house values in California using the cal_housing.csv dataset. The dataset contains features like median income, house age, average rooms, population, and geographic coordinates.`
+2. 在 **Title** 输入：`加州房价预测`
+3. 在 **Description** 输入：`探索使用 cal_housing.csv 数据集预测加州房屋中位价格的方法。数据集包含收入中位数、房龄、平均房间数、平均卧室数、人口、平均入住率、经纬度等特征。`
 
 **验证点**：
+
 - [ ] 右侧信息栏正确显示，类型标签为 "Idea"（黄色）
 - [ ] 标题和描述可编辑，编辑后节点标题在画布上实时更新
 - [ ] 信息栏右上角的 × 可以关闭信息栏
@@ -64,6 +66,7 @@ npm run dev
 2. 按住鼠标左键拖动画布平移
 
 **验证点**：
+
 - [ ] 缩放范围在 0.25x ~ 4x 之间，不会无限缩小或放大
 - [ ] 拖动平滑，无卡顿
 
@@ -76,22 +79,24 @@ npm run dev
 1. 选中根节点，找到节点右侧的 **+灵感节点** 按钮并点击
 2. 新灵感节点出现在根节点右侧
 3. 点击新节点，在信息栏输入：
-   - Title: `Linear Regression Baseline`
-   - Description: `Establish a simple linear regression baseline on cal_housing.csv. Use MedInc, HouseAge, AveRooms, AveBedrms, Population, AveOccup, Latitude, Longitude as features, MedHouseVal as target. Report RMSE and R² on a 80/20 train-test split.`
+  - 标题：`线性回归基线`
+  - 描述：`在 cal_housing.csv 上建立简单的线性回归基线。以 MedInc、HouseAge、AveRooms、AveBedrms、Population、AveOccup、Latitude、Longitude 为特征，MedHouseVal 为目标变量。按 80/20 划分训练集和测试集，报告 RMSE 和 R²。`
 
 **验证点**：
+
 - [ ] 新灵感节点为黄色，通过**黄色**连线与父节点相连
 - [ ] 节点在父节点**右侧**
 
 ### 2.2 添加实验节点
 
-1. 选中刚创建的 "Linear Regression Baseline" 灵感节点
+1. 选中刚创建的「线性回归基线」灵感节点
 2. 点击 **+实验节点** 按钮
 3. 点击新实验节点，在信息栏输入：
-   - Title: `Run Linear Regression`
-   - Description: `Write a Python script that: 1) Reads data/cal_housing.csv 2) Splits into 80% train / 20% test 3) Fits sklearn LinearRegression 4) Prints RMSE and R² on test set 5) Saves predictions to output/predictions.csv`
+  - 标题：`运行线性回归`
+  - 描述：`编写 Python 脚本：1) 读取 data/cal_housing.csv；2) 按 80% 训练 / 20% 测试划分数据；3) 使用 sklearn LinearRegression 拟合模型；4) 在测试集上打印 RMSE 和 R²；5) 将预测结果保存到 output/predictions.csv。`
 
 **验证点**：
+
 - [ ] 新实验节点为灰色，通过**灰色**连线与父灵感节点相连
 - [ ] 实验节点位于父灵感节点**下方**
 - [ ] 信息栏类型标签显示 "Experiment"（灰色）
@@ -102,17 +107,19 @@ npm run dev
 1. 选中上一步的实验节点
 
 **验证点**：
-- [ ] 实验节点旁**没有** +灵感节点 和 +实验节点 按钮
+
+- [x] 实验节点旁**没有** +灵感节点 和 +实验节点 按钮
 
 ### 2.4 添加第二个灵感子节点
 
 1. 再次选中根节点
 2. 点击 **+灵感节点**
 3. 编辑新节点：
-   - Title: `Random Forest Approach`
-   - Description: `Try Random Forest regression on the same dataset and compare with linear baseline.`
+  - 标题：`随机森林方案`
+  - 描述：`在同一数据集上尝试随机森林回归，并与线性回归基线进行对比。`
 
 **验证点**：
+
 - [ ] 两个灵感子节点在根节点右侧**从上往下排列**
 - [ ] 节点与连线不重叠，布局自动调整
 
@@ -126,6 +133,7 @@ npm run dev
 2. 在弹出的保存对话框中选一个位置，文件名为 `test-housing.ist`
 
 **验证点**：
+
 - [ ] 弹出保存对话框，默认扩展名为 `.ist`
 - [ ] 保存后标题栏显示文件路径，不再有 `*` 脏标记
 
@@ -138,6 +146,7 @@ cat /path/to/your/test-housing.ist | python3 -m json.tool | head -30
 ```
 
 **验证点**：
+
 - [ ] 文件为合法 JSON
 - [ ] 包含 `version`、`rootNodeId`、`nodes`、`meta` 字段
 - [ ] `nodes` 中有根节点、两个灵感子节点、一个实验节点
@@ -149,6 +158,7 @@ cat /path/to/your/test-housing.ist | python3 -m json.tool | head -30
 2. 按 `Cmd+O`，选择刚才保存的 `test-housing.ist`
 
 **验证点**：
+
 - [ ] 所有节点和内容完整恢复
 - [ ] 树状结构布局与保存前一致
 
@@ -162,6 +172,7 @@ cat /path/to/your/test-housing.ist | python3 -m json.tool | head -30
 2. 向下滚动到 **Experiment Harness (Claude Code CLI)** 区域
 
 **验证点**：
+
 - [ ] Command 默认值为 `claude`
 - [ ] Permission mode 默认值为 `bypassPermissions`
 - [ ] Model 为空（使用 Claude Code 默认模型）
@@ -186,11 +197,12 @@ cat /path/to/your/test-housing.ist | python3 -m json.tool | head -30
 
 ### 5.2 运行第一个实验
 
-1. 点击之前创建的实验节点 "Run Linear Regression"
+1. 点击之前创建的实验节点「运行线性回归」
 2. 确认信息栏中 Description 已填写（必须非空才能运行）
 3. 点击 **Run Experiment** 按钮
 
 **观察与验证**：
+
 - [ ] 按钮变为 **Stop Experiment**（红色）
 - [ ] Status 显示 **Running**（黄色）
 - [ ] 窗口底部出现 **Experiment Log** 面板，显示 "Running…"
@@ -202,6 +214,7 @@ cat /path/to/your/test-housing.ist | python3 -m json.tool | head -30
 实验通常需要 1~5 分钟。耐心等待，观察日志输出。
 
 **实验完成后验证**：
+
 - [ ] Status 变为 **Done**（绿色）或 **Failed**（红色）
 - [ ] 按钮恢复为 **Run Experiment**
 - [ ] 信息栏中出现 **Result** 区域，显示实验摘要文本
@@ -226,6 +239,7 @@ git -C "$WORKSPACE" ls-tree --name-only HEAD
 ```
 
 **验证点**：
+
 - [ ] 工作区目录已自动创建
 - [ ] 是一个合法的 git 仓库
 - [ ] `main` 分支存在，包含基线 commit（含 `data/cal_housing.csv`）
@@ -240,6 +254,7 @@ ls "$WORKSPACE/.ist-runs/"
 ```
 
 **验证点**：
+
 - [ ] 存在一个以 UUID 命名的子目录
 - [ ] 子目录中包含：
   - `prompt.md` — 发送给 Claude Code 的完整 prompt
@@ -254,6 +269,7 @@ cat "$WORKSPACE/.ist-runs/$(ls $WORKSPACE/.ist-runs/ | head -1)/prompt.md"
 ```
 
 **验证点**：
+
 - [ ] prompt 包含 "Inspiration path (root → current)" 部分，从根节点到当前实验节点的完整路径
 - [ ] prompt 包含实验描述
 - [ ] prompt 包含 "data/cal_housing.csv" 的提示
@@ -277,6 +293,7 @@ for nid, n in proj['nodes'].items():
 ```
 
 **验证点**：
+
 - [ ] `runStatus` 为 `done`
 - [ ] `gitBranch` 为 `exp/xxxxxxxx`
 - [ ] `experimentResult` 包含实验摘要文本
@@ -288,8 +305,8 @@ for nid, n in proj['nodes'].items():
 
 ### 6.1 创建一个新的长时间实验
 
-1. 在 "Linear Regression Baseline" 灵感节点下再添加一个实验节点
-2. Description 输入：`Write a comprehensive Python script that performs exhaustive hyperparameter grid search on 5 different regression models (Linear, Ridge, Lasso, ElasticNet, SVR) using 10-fold cross-validation on data/cal_housing.csv. For each model, try at least 20 hyperparameter combinations.`
+1. 在「线性回归基线」灵感节点下再添加一个实验节点
+2. 描述输入：`编写一个完整的 Python 脚本，在 data/cal_housing.csv 上对 5 种回归模型（Linear、Ridge、Lasso、ElasticNet、SVR）进行穷举式超参数网格搜索，使用 10 折交叉验证。每个模型至少尝试 20 组超参数组合。`
 3. 点击 **Run Experiment**
 
 ### 6.2 中途停止
@@ -298,6 +315,7 @@ for nid, n in proj['nodes'].items():
 2. 点击 **Stop Experiment**
 
 **验证点**：
+
 - [ ] 实验在几秒内停止
 - [ ] Status 恢复为 **Idle**
 - [ ] 日志面板停止更新
@@ -318,10 +336,11 @@ for nid, n in proj['nodes'].items():
 
 ### 7.2 AI 生成标题
 
-1. 新建一个灵感节点，只填 Description：`Apply gradient boosting methods like XGBoost and LightGBM on the California housing dataset and compare their performance with ensemble stacking.`
+1. 新建一个灵感节点，只填描述：`在加州房价数据集上应用 XGBoost、LightGBM 等梯度提升方法，并与集成堆叠（ensemble stacking）方案对比性能。`
 2. 点击 **AI Generate Title**
 
 **验证点**：
+
 - [ ] 标题自动生成，内容与描述相关
 - [ ] 生成过程中按钮显示 "Generating..."
 
@@ -331,6 +350,7 @@ for nid, n in proj['nodes'].items():
 2. 点击 **AI Summarize**
 
 **验证点**：
+
 - [ ] 描述被更新为 AI 生成的总结
 - [ ] 总结涵盖从根到当前灵感节点的路径以及所有子节点的概要
 
@@ -344,6 +364,7 @@ for nid, n in proj['nodes'].items():
 2. 选中它，按 `Delete` 键
 
 **验证点**：
+
 - [ ] 节点直接删除，无弹窗确认
 
 ### 8.2 删除有内容的节点
@@ -352,6 +373,7 @@ for nid, n in proj['nodes'].items():
 2. 按 `Delete` 键
 
 **验证点**：
+
 - [ ] 弹出确认对话框
 - [ ] 取消后节点仍在
 - [ ] 确认后节点及其所有子节点被删除
@@ -362,6 +384,7 @@ for nid, n in proj['nodes'].items():
 2. 按 `Delete` 键
 
 **验证点**：
+
 - [ ] 无反应，根节点不可删除
 
 ---
@@ -374,6 +397,7 @@ for nid, n in proj['nodes'].items():
 2. 点击 **Run Experiment**
 
 **验证点**：
+
 - [ ] 显示错误提示 "Please enter an experiment description first"
 - [ ] 实验不会启动
 
@@ -383,6 +407,7 @@ for nid, n in proj['nodes'].items():
 2. 创建灵感节点 → 创建实验节点 → 填写描述 → Run Experiment
 
 **验证点**：
+
 - [ ] 应用应能处理此情况（工作区会使用 `userData` 下的默认路径），不会崩溃
 
 ---
@@ -391,22 +416,25 @@ for nid, n in proj['nodes'].items():
 
 完成以上所有测试后，对照确认：
 
-| # | 功能 | 通过？ |
-|---|------|--------|
-| 1 | 新建/打开/保存 `.ist` 工程文件 | |
-| 2 | 灵感节点（黄色）与实验节点（灰色）正确渲染 | |
-| 3 | 树状布局自动排列，连线颜色正确 | |
-| 4 | 画布缩放与拖动 | |
-| 5 | 右侧信息栏编辑标题、描述 | |
-| 6 | 节点删除逻辑（空节点/有内容/根节点） | |
-| 7 | 快捷键（Cmd+S/N/O/Delete/Escape） | |
-| 8 | Settings 中配置 Harness 参数 | |
-| 9 | Run Experiment → Claude Code CLI 被调用 | |
-| 10 | 实时流式日志显示在 LogPanel | |
-| 11 | 实验完成后 git commit 到独立分支 | |
-| 12 | 实验结果回写到节点（runStatus / gitBranch / experimentResult） | |
-| 13 | 运行轨迹落盘到 `.ist-runs/` | |
-| 14 | Stop Experiment 能正常终止实验 | |
-| 15 | AI Generate Title（需配置 AI） | |
-| 16 | AI Summarize（需配置 AI） | |
-| 17 | 工程保存后重新打开，所有数据完整恢复 | |
+
+| #   | 功能                                                  | 通过？ |
+| --- | --------------------------------------------------- | --- |
+| 1   | 新建/打开/保存 `.ist` 工程文件                                |     |
+| 2   | 灵感节点（黄色）与实验节点（灰色）正确渲染                               |     |
+| 3   | 树状布局自动排列，连线颜色正确                                     |     |
+| 4   | 画布缩放与拖动                                             |     |
+| 5   | 右侧信息栏编辑标题、描述                                        |     |
+| 6   | 节点删除逻辑（空节点/有内容/根节点）                                 |     |
+| 7   | 快捷键（Cmd+S/N/O/Delete/Escape）                        |     |
+| 8   | Settings 中配置 Harness 参数                             |     |
+| 9   | Run Experiment → Claude Code CLI 被调用                |     |
+| 10  | 实时流式日志显示在 LogPanel                                  |     |
+| 11  | 实验完成后 git commit 到独立分支                              |     |
+| 12  | 实验结果回写到节点（runStatus / gitBranch / experimentResult） |     |
+| 13  | 运行轨迹落盘到 `.ist-runs/`                                |     |
+| 14  | Stop Experiment 能正常终止实验                             |     |
+| 15  | AI Generate Title（需配置 AI）                           |     |
+| 16  | AI Summarize（需配置 AI）                                |     |
+| 17  | 工程保存后重新打开，所有数据完整恢复                                  |     |
+
+

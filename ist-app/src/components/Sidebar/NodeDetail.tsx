@@ -24,6 +24,7 @@ export const NodeDetail: React.FC = () => {
   const activeExpNodeId = useExperimentStore((s) => s.activeNodeId)
   const clearExpLogs = useExperimentStore((s) => s.clearLogs)
   const filePath = useTreeStore((s) => s.filePath)
+  const markClean = useTreeStore((s) => s.markClean)
   const setWorkspacePath = useTreeStore((s) => s.setWorkspacePath)
 
   if (!sidebarOpen || !node) return null
@@ -124,20 +125,36 @@ export const NodeDetail: React.FC = () => {
       return
     }
 
+    if (!filePath) {
+      setExpError('请先保存工程文件（Cmd+S）后再运行实验')
+      return
+    }
+
     setExpError(null)
     clearExpLogs()
-    updateNode(node.id, { runStatus: 'running' })
 
-    if (!project.meta.workspacePath && filePath) {
+    const state = useTreeStore.getState()
+    if (!state.project) return
+
+    if (!state.project.meta.workspacePath) {
       const baseName = filePath.split(/[/\\]/).pop()?.replace(/\.ist$/i, '') ?? 'project'
       setWorkspacePath(`${baseName}-workspace`)
     }
 
     try {
+      const latest = useTreeStore.getState()
+      if (!latest.project || !latest.filePath) return
+
+      if (latest.isDirty && window.electronAPI?.file) {
+        await window.electronAPI.file.save(latest.filePath, latest.project)
+        markClean()
+      }
+
+      updateNode(node.id, { runStatus: 'running' })
+
       await window.electronAPI.experiment.run({
         nodeId: node.id,
-        project: useTreeStore.getState().project!,
-        istFilePath: filePath
+        istFilePath: latest.filePath
       })
     } catch (err) {
       updateNode(node.id, { runStatus: 'failed' })

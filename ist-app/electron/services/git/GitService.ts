@@ -2,6 +2,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { safeErrorMessage } from '../../utils/truncate'
 
 const execFileAsync = promisify(execFile)
 
@@ -9,12 +10,16 @@ export class GitService {
   constructor(private readonly cwd: string) {}
 
   private async run(args: string[]): Promise<string> {
-    const { stdout } = await execFileAsync('git', args, {
-      cwd: this.cwd,
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024
-    })
-    return stdout.trim()
+    try {
+      const { stdout } = await execFileAsync('git', args, {
+        cwd: this.cwd,
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024
+      })
+      return stdout.trim()
+    } catch (err) {
+      throw new Error(safeErrorMessage(err, 300))
+    }
   }
 
   async initIfNeeded(): Promise<void> {
@@ -57,7 +62,11 @@ export class GitService {
   }
 
   async commitAll(message: string): Promise<boolean> {
-    await this.run(['add', '-A'])
+    try {
+      await this.run(['add', '-A'])
+    } catch {
+      return false
+    }
     try {
       const status = await this.run(['status', '--porcelain'])
       if (!status) return false

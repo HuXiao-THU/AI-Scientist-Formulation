@@ -49,9 +49,13 @@ export interface AppSettings {
 
 export interface ExperimentRunRequest {
   nodeId: string
-  project: ISTProject
-  istFilePath: string | null
+  istFilePath: string
   repoDataRoot?: string | null
+}
+
+/** Internal context passed to ExperimentRunner (project loaded in main process). */
+export interface ExperimentRunContext extends ExperimentRunRequest {
+  project: ISTProject
 }
 
 export interface ExperimentRunResult {

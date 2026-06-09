@@ -219,10 +219,6 @@ function render(): void {
     if (cur.dispLine >= wrapped.length && cur.dispLine >= descScroll && cur.dispLine < descScroll + maxDescLines) {
       middle.push(theme.accent("  │ ") + "\x1b[7m \x1b[27m");
     }
-    // Pad to maxDescLines
-    while (middle.length < (middle[0]?.startsWith(theme.muted("─")) ? 1 : 0) + maxDescLines + 1) {
-      // keep as-is, the footer calculation handles it
-    }
   }
 
   // Detail

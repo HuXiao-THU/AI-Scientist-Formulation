@@ -22,7 +22,7 @@ export function visualWidth(s: string): number {
   let w = 0;
   for (const ch of s) {
     const cp = ch.codePointAt(0) ?? 0;
-    w += charWidth(cp) ? 2 : 1;
+    w += charWidth(cp);
   }
   return w;
 }

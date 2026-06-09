@@ -7,6 +7,7 @@ import type {
 } from "./types.js";
 import { getPathToRoot } from "./tree-model.js";
 import { createISTTools } from "./tools.js";
+import { GitWorkspace } from "./git.js";
 import { safeErrorMessage } from "../utils/truncate.js";
 
 export type LogCallback = (event: ExperimentLogEvent) => void;
@@ -145,8 +146,18 @@ export async function runExperiment(
   onLog: LogCallback,
   signal?: AbortSignal,
 ): Promise<ExperimentRunResult> {
-  // Ensure workspace exists
   mkdirSync(workspacePath, { recursive: true });
+
+  // Git: create experiment branch
+  const git = new GitWorkspace(workspacePath);
+  let branchName = "";
+  try {
+    await git.init();
+    const shortId = node.id.replace(/-/g, "").slice(0, 8);
+    branchName = `exp/${shortId}`;
+    try { await git.createBranch(branchName, "main"); }
+    catch { /* best effort */ }
+  } catch { /* git unavailable, continue without */ }
 
   try {
     const systemPrompt = buildSystemPrompt(project, node, workspacePath);
@@ -165,7 +176,13 @@ export async function runExperiment(
     await agent.prompt(userPrompt);
     await agent.waitForIdle();
 
-    // Extract summary from last assistant message
+    // Commit results
+    if (branchName) {
+      try { await git.commitAll(`experiment: ${node.title || node.id}`); }
+      catch { /* best effort */ }
+    }
+
+    // Extract summary
     const messages = agent.state.messages;
     let summary = "";
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -180,10 +197,11 @@ export async function runExperiment(
       success: !agent.state.errorMessage,
       summary: summary.slice(0, 8000) || "Experiment completed.",
       error: agent.state.errorMessage,
+      gitBranch: branchName || undefined,
     };
   } catch (err) {
     const error = safeErrorMessage(err);
     onLog({ type: "error", timestamp: ts(), message: error });
-    return { success: false, summary: "", error };
+    return { success: false, summary: "", error, gitBranch: branchName || undefined };
   }
 }

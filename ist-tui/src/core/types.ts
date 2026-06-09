@@ -48,4 +48,5 @@ export interface ExperimentRunResult {
   success: boolean;
   summary: string;
   error?: string;
+  gitBranch?: string;
 }

@@ -188,6 +188,7 @@ export async function startExperiment(
   updateNode(state.project, node.id, {
     runStatus: result.success ? "done" : "failed",
     experimentResult: result.summary || result.error || "",
+    gitBranch: result.gitBranch,
   });
 
   state.isRunning = false;

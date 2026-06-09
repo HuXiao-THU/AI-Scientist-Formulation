@@ -16,14 +16,18 @@ import { renderNodeDetail } from "./tui/node-detail.js";
 import { renderLogPanel } from "./tui/log-panel.js";
 import { renderMarkdown } from "./tui/markdown-view.js";
 import { theme } from "./tui/theme.js";
-import { clipToWidth } from "./utils/truncate.js";
+import { clipToWidth, charWidth } from "./utils/truncate.js";
 import { fileExists } from "./core/ist-file.js";
 
 // ─── Terminal Setup ──────────────────────────────────────
 
 let W = process.stdout.columns || 120;
 let R = process.stdout.rows || 40;
-process.stdout.on("resize", () => { W = process.stdout.columns || 120; R = process.stdout.rows || 40; render(); });
+let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+process.stdout.on("resize", () => {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { W = process.stdout.columns || 120; R = process.stdout.rows || 40; render(); }, 50);
+});
 process.stdout.write("\x1b[?25l");
 process.on("exit", () => process.stdout.write("\x1b[?25h\x1b[2J\x1b[H"));
 if (!process.stdin.isTTY) { console.error("IST requires a terminal (TTY)."); process.exit(1); }
@@ -36,6 +40,8 @@ let editingValue = "";
 let cursorPos = 0;
 let viewMode: "tree" | "result" = "tree";
 let resultScroll = 0;
+let treeScroll = 0;
+let descScroll = 0;
 
 const args = process.argv.slice(2);
 let cliFilePath: string | null = null;
@@ -90,7 +96,7 @@ function wrapLines(text: string, maxW: number): { text: string; startPos: number
     for (let i = 0; i < ll.length; i++) {
       const ch = ll[i];
       const cp = ch.codePointAt(0) ?? 0;
-      const cw = (cp > 127 && cp < 0x20000) || cp >= 0x20000 ? 2 : 1;
+      const cw = charWidth(cp);
       if (visW + cw > maxW && wrapped.length > 0) {
         result.push({ text: wrapped, startPos: wrappedStart });
         wrapped = "";
@@ -113,11 +119,11 @@ function cursorDisplayPos(wrapped: { text: string; startPos: number }[], pos: nu
   for (let i = 0; i < wrapped.length; i++) {
     const w = wrapped[i];
     const endPos = w.startPos + w.text.length;
-    if (pos >= w.startPos && pos <= endPos) {
+    if (pos >= w.startPos && pos < endPos) {
       return { dispLine: i, dispCol: pos - w.startPos };
     }
   }
-  // Default to end
+  // Cursor at or past end: position after last character
   const last = wrapped[wrapped.length - 1];
   if (last) return { dispLine: wrapped.length - 1, dispCol: last.text.length };
   return { dispLine: 0, dispCol: 0 };
@@ -172,7 +178,7 @@ function render(): void {
         theme.muted("  [←→↑↓] move  [Esc] save  [Tab] switch"));
     }
   } else {
-    footer.push(theme.muted("  ↑↓ nav  i idea  e exp  r run  s save  Tab edit  del  q quit"));
+    footer.push(theme.muted("  ↑↓ nav  i idea  e exp  a summarize  r run  s save  Tab edit  del  q quit"));
     if (state.error) footer.unshift(theme.failed(`  ${state.error}`));
   }
 
@@ -180,17 +186,24 @@ function render(): void {
   const middle: string[] = [];
   if (state.isRunning) {
     middle.push(theme.muted("─".repeat(W)));
-    middle.push(...renderLogPanel(state.experimentLog, W));
+    middle.push(...renderLogPanel(state.experimentLog, W, R));
   } else if (editingField === "description") {
     middle.push(theme.muted("─".repeat(W) + " Description " + "─".repeat(Math.max(0, W - 14))));
-    // Word-wrap and show with cursor
     const wrapW = W - 4;
     const wrapped = wrapLines(editingValue, wrapW);
     const cur = cursorDisplayPos(wrapped, cursorPos);
-    for (let i = 0; i < wrapped.length; i++) {
+
+    // Limit visible lines and scroll
+    const maxDescLines = Math.min(wrapped.length + 1, 10); // +1 for potential empty cursor line
+    // Auto-scroll to keep cursor visible
+    if (cur.dispLine < descScroll) descScroll = cur.dispLine;
+    if (cur.dispLine >= descScroll + maxDescLines) descScroll = cur.dispLine - maxDescLines + 1;
+    descScroll = Math.max(0, Math.min(descScroll, Math.max(0, wrapped.length + 1 - maxDescLines)));
+
+    const endIdx = Math.min(descScroll + maxDescLines, wrapped.length);
+    for (let i = descScroll; i < endIdx; i++) {
       let line = theme.accent("  │ ");
-      if (i === cur.dispLine) {
-        // Insert cursor (reverse video) into this line
+      if (i === cur.dispLine && cur.dispLine < wrapped.length) {
         const txt = wrapped[i].text;
         const col = Math.min(cur.dispCol, txt.length);
         const before = txt.slice(0, col);
@@ -202,9 +215,13 @@ function render(): void {
       }
       middle.push(line);
     }
-    // If cursor is past the last line, show cursor on a new empty line
-    if (cur.dispLine >= wrapped.length) {
+    // Show cursor on empty line if past end
+    if (cur.dispLine >= wrapped.length && cur.dispLine >= descScroll && cur.dispLine < descScroll + maxDescLines) {
       middle.push(theme.accent("  │ ") + "\x1b[7m \x1b[27m");
+    }
+    // Pad to maxDescLines
+    while (middle.length < (middle[0]?.startsWith(theme.muted("─")) ? 1 : 0) + maxDescLines + 1) {
+      // keep as-is, the footer calculation handles it
     }
   }
 
@@ -217,6 +234,18 @@ function render(): void {
   const fixedBelow = detail.length + 1 + middle.length + footer.length;
   const maxTree = Math.max(5, R - 1 - 2 - fixedBelow);
 
+  // Tree scroll: find selected node's line index and keep it visible
+  const selIdx = state.selectedId
+    ? treeLines.findIndex(l => l.includes(state.selectedId!))
+    : -1;
+  const clampedTreeScroll = Math.max(0, Math.min(treeScroll, Math.max(0, treeLines.length - maxTree)));
+  // Auto-scroll: ensure selected node is in view
+  if (selIdx >= 0) {
+    if (selIdx < clampedTreeScroll) treeScroll = selIdx;
+    else if (selIdx >= clampedTreeScroll + maxTree) treeScroll = selIdx - maxTree + 1;
+  }
+  const effTreeScroll = Math.max(0, Math.min(treeScroll, Math.max(0, treeLines.length - maxTree)));
+
   // Build rows
   const rows: string[] = [];
   const label = state.filePath ?? "Untitled";
@@ -226,7 +255,7 @@ function render(): void {
   rows.push(clipToWidth(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W));
   rows.push(theme.muted("─".repeat(W)));
 
-  const visibleTree = treeLines.slice(0, maxTree);
+  const visibleTree = treeLines.slice(effTreeScroll, effTreeScroll + maxTree);
   for (const line of visibleTree) rows.push(clipToWidth(line, W));
   while (rows.length < 2 + maxTree) rows.push("");
 
@@ -256,7 +285,7 @@ process.stdin.on("keypress", async (_str, key) => {
           editingField = null; editingValue = ""; cursorPos = 0; render(); return;
         case "tab":
           if (node) updateSelectedDescription(state, editingValue);
-          editingField = null; editingValue = ""; cursorPos = 0; render(); return;
+          editingField = "title"; editingValue = node?.title ?? ""; cursorPos = 0; descScroll = 0; render(); return;
         case "up": {
           const lc = getLineCol(editingValue, cursorPos);
           if (lc.line > 0) cursorPos = getPosFromLineCol(editingValue, lc.line - 1, lc.col);
@@ -385,11 +414,22 @@ process.stdin.on("keypress", async (_str, key) => {
     case "escape":
       selectNode(state, null); render();
       break;
+    case "a":
+      if (!state.isRunning && state.selectedId) {
+        const an = state.project.nodes[state.selectedId];
+        if (an?.type === "idea") {
+          const { aiSummarize } = await import("./app.js");
+          render();
+          await aiSummarize(state, () => render());
+          render();
+        }
+      }
+      break;
     case "m":
       if (!state.isRunning && state.selectedId) {
         const rn = state.project.nodes[state.selectedId];
         if (rn?.type === "experiment" && rn.experimentResult) {
-          viewMode = "result"; render();
+          viewMode = "result"; resultScroll = 0; render();
         }
       }
       break;

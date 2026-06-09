@@ -13,7 +13,7 @@ import {
   getSubtree,
   getChildren,
 } from "./core/tree-model.js";
-import { runExperiment } from "./core/experiment.js";
+import { runExperiment, createAgent } from "./core/experiment.js";
 import type {
   ISTProject,
   ISTNode,
@@ -210,9 +210,72 @@ export function stopExperiment(state: AppState): void {
   }
 }
 
-export function aiSummarize(state: AppState): void {
-  // Placeholder — will be implemented with agent call
-  state.error = "AI Summarize: not yet implemented (will use agent)";
+export async function aiSummarize(
+  state: AppState,
+  onLog: (e: ExperimentLogEvent) => void
+): Promise<void> {
+  if (!state.selectedId) return;
+  const node = state.project.nodes[state.selectedId];
+  if (!node || node.type !== "idea") {
+    state.error = "Select an idea node to summarize.";
+    return;
+  }
+
+  const wsPath = state.project.meta.workspacePath ||
+    (state.filePath ? workspacePath(state.filePath) : "/tmp/ist-workspace");
+
+  // Build summarization prompt
+  const subtree = getSubtree(state.project, state.selectedId);
+  const childrenSummary = subtree
+    .filter(n => n.id !== state.selectedId)
+    .map(n => `[${n.type}] ${n.title || "(untitled)"}: ${(n.description || "").slice(0, 100)}`)
+    .join("\n");
+
+  const prompt = [
+    "Summarize the following research idea and its sub-nodes concisely.",
+    "Write in the same language as the input. Keep it under 200 characters.",
+    "",
+    `Idea: ${node.title || "(untitled)"}`,
+    `Current description: ${node.description || "(none)"}`,
+    "",
+    "Sub-nodes:",
+    childrenSummary || "(none)",
+    "",
+    "Return ONLY the summary text, no extra formatting.",
+  ].join("\n");
+
+  state.isRunning = true;
+  state.experimentLog.clear();
+  state.error = null;
+
+  try {
+    const agent = createAgent(state.experimentConfig, wsPath, (event) => {
+      state.experimentLog.append(event);
+      onLog(event);
+    });
+    agent.state.systemPrompt = "You are a research assistant. Summarize research ideas concisely.";
+    await agent.waitForIdle();
+    await agent.prompt(prompt);
+    await agent.waitForIdle();
+
+    const msgs = agent.state.messages;
+    let summary = "";
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m && m.role === "assistant") {
+        const c = m.content;
+        if (typeof c === "string") summary = c;
+        else if (Array.isArray(c)) {
+          summary = c.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n");
+        }
+        if (summary) break;
+      }
+    }
+    if (summary) updateNode(state.project, node.id, { description: summary.trim() });
+  } catch (err) {
+    state.error = safeErrorMessage(err);
+  }
+  state.isRunning = false;
 }
 
 // ─── Navigation ──────────────────────────────────────────

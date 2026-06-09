@@ -6,9 +6,17 @@ import { Type } from "@earendil-works/pi-ai";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve as pathResolve } from "node:path";
 
 const execFileAsync = promisify(execFile);
+
+/** Resolve and validate a path against the workspace root. Returns null on traversal attempt. */
+function resolvePath(workspaceRoot: string, filePath: string): string | null {
+  const root = pathResolve(workspaceRoot);
+  const resolved = pathResolve(root, filePath);
+  if (!resolved.startsWith(root + "/") && resolved !== root) return null;
+  return resolved;
+}
 
 // ─── Bash ─────────────────────────────────────────────────
 
@@ -77,10 +85,12 @@ export function createReadTool(workspacePath: string): AgentTool<typeof ReadSche
       params: { file_path: string; offset?: number; limit?: number },
       _signal?: AbortSignal
     ): Promise<AgentToolResult<string>> {
-      const fullPath = params.file_path.startsWith("/")
-        ? params.file_path : `${workspacePath}/${params.file_path}`;
+      const resolved = resolvePath(workspacePath, params.file_path);
+      if (!resolved) {
+        return { content: [{ type: "text", text: "Error: path traversal denied" }], details: JSON.stringify({ error: "path traversal" }) };
+      }
       try {
-        const content = await readFile(fullPath, "utf-8");
+        const content = await readFile(resolved, "utf-8");
         const lines = content.split("\n");
         const start = Math.max(0, (params.offset ?? 1) - 1);
         const end = params.limit ? start + params.limit : lines.length;
@@ -88,7 +98,7 @@ export function createReadTool(workspacePath: string): AgentTool<typeof ReadSche
           .map((l, i) => `${String(start + i + 1).padStart(4)}  ${l}`).join("\n");
         return {
           content: [{ type: "text", text: numbered || "(empty)" }],
-          details: JSON.stringify({ path: fullPath, totalLines: lines.length }),
+          details: JSON.stringify({ path: resolved, totalLines: lines.length }),
         };
       } catch (err: any) {
         return {
@@ -118,14 +128,16 @@ export function createWriteTool(workspacePath: string): AgentTool<typeof WriteSc
       params: { file_path: string; content: string },
       _signal?: AbortSignal
     ): Promise<AgentToolResult<string>> {
-      const fullPath = params.file_path.startsWith("/")
-        ? params.file_path : `${workspacePath}/${params.file_path}`;
+      const resolved = resolvePath(workspacePath, params.file_path);
+      if (!resolved) {
+        return { content: [{ type: "text", text: "Error: path traversal denied" }], details: JSON.stringify({ error: "path traversal" }) };
+      }
       try {
-        await mkdir(dirname(fullPath), { recursive: true });
-        await writeFile(fullPath, params.content, "utf-8");
+        await mkdir(dirname(resolved), { recursive: true });
+        await writeFile(resolved, params.content, "utf-8");
         return {
           content: [{ type: "text", text: `Wrote ${params.content.length} bytes to ${params.file_path}` }],
-          details: JSON.stringify({ path: fullPath, bytes: params.content.length }),
+          details: JSON.stringify({ path: resolved, bytes: params.content.length }),
         };
       } catch (err: any) {
         return {

@@ -1,6 +1,6 @@
 import type { ExperimentLogEvent } from "../core/types.js";
 import { theme } from "./theme.js";
-import { truncateToWidth } from "../utils/truncate.js";
+import { truncateToWidth, stripAnsi, visualWidth } from "../utils/truncate.js";
 
 /** Store for the streaming experiment log */
 export class ExperimentLog {
@@ -27,14 +27,15 @@ export class ExperimentLog {
 /** Render the experiment log panel */
 export function renderLogPanel(
   log: ExperimentLog,
-  width: number
+  width: number,
+  availHeight?: number
 ): string[] {
   const entries = log.getEntries();
   if (entries.length === 0) {
     return renderBox("Experiment Log", [theme.muted("  No experiment running.")], width);
   }
 
-  const maxLines = Math.max(5, process.stdout.rows - 20);
+  const maxLines = Math.max(5, (availHeight ?? process.stdout.rows) - 8);
   const displayEntries = entries.slice(-maxLines);
 
   const content: string[] = [];
@@ -64,13 +65,13 @@ export function renderBox(
   const hBar = "─".repeat(Math.max(0, w - 2));
 
   lines.push(theme.border(`┌${hBar}┐`));
-  const titleLen = title.replace(/\x1b\[[0-9;]*m/g, "").length;
-  lines.push(theme.border("│") + theme.bold(title) + " ".repeat(Math.max(0, w - 2 - titleLen)) + theme.border("│"));
+  const titleVW = visualWidth(stripAnsi(title));
+  lines.push(theme.border("│") + theme.bold(title) + " ".repeat(Math.max(0, w - 2 - titleVW)) + theme.border("│"));
   lines.push(theme.border(`├${hBar}┤`));
 
   for (const c of content) {
-    const cl = c.replace(/\x1b\[[0-9;]*m/g, "").length;
-    lines.push(theme.border("│") + c + " ".repeat(Math.max(0, w - 2 - cl)) + theme.border("│"));
+    const cVW = visualWidth(stripAnsi(c));
+    lines.push(theme.border("│") + c + " ".repeat(Math.max(0, w - 2 - cVW)) + theme.border("│"));
   }
 
   lines.push(theme.border(`└${hBar}┘`));

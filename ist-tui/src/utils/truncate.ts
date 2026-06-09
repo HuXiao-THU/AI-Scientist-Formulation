@@ -58,3 +58,22 @@ export function padToWidth(s: string, targetWidth: number): string {
   if (vw >= targetWidth) return s;
   return s + " ".repeat(targetWidth - vw);
 }
+
+/** Clip a line to a maximum visual width, preserving ANSI codes */
+export function clipToWidth(s: string, maxW: number): string {
+  let out = "";
+  let vis = 0;
+  for (let i = 0; i < s.length && vis < maxW; i++) {
+    if (s[i] === "\x1b" && s.slice(i).match(/^\x1b\[[0-9;]*m/)) {
+      const m = s.slice(i).match(/^\x1b\[[0-9;]*m/)!;
+      out += m[0];
+      i += m[0].length - 1;
+      continue;
+    }
+    const cp = s.codePointAt(i) ?? 0;
+    vis += (cp > 127 && cp < 0x20000) || cp >= 0x20000 ? 2 : 1;
+    if (vis > maxW) break;
+    out += s[i];
+  }
+  return out;
+}

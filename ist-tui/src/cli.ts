@@ -14,7 +14,9 @@ import {
 import { renderTree } from "./tui/tree-view.js";
 import { renderNodeDetail } from "./tui/node-detail.js";
 import { renderLogPanel } from "./tui/log-panel.js";
+import { renderMarkdown } from "./tui/markdown-view.js";
 import { theme } from "./tui/theme.js";
+import { clipToWidth } from "./utils/truncate.js";
 import { fileExists } from "./core/ist-file.js";
 
 // ─── Terminal Setup ──────────────────────────────────────
@@ -31,7 +33,8 @@ if (!process.stdin.isTTY) { console.error("IST requires a terminal (TTY)."); pro
 let state: AppState = createAppState();
 let editingField: "title" | "description" | null = null;
 let editingValue = "";
-let cursorPos = 0; // character index within editingValue
+let cursorPos = 0;
+let viewMode: "tree" | "result" = "tree";
 
 const args = process.argv.slice(2);
 let cliFilePath: string | null = null;
@@ -124,6 +127,27 @@ function cursorDisplayPos(wrapped: { text: string; startPos: number }[], pos: nu
 const DETAIL_LINES = 6;
 
 function render(): void {
+  // ── Result viewer mode ──
+  if (viewMode === "result") {
+    const selNode = state.selectedId ? state.project.nodes[state.selectedId] ?? null : null;
+    const rows: string[] = [];
+    rows.push(clipToWidth(`${theme.bold("IST")} ${theme.muted("— Result Viewer")}`, W));
+    rows.push(theme.muted("─".repeat(W)));
+    if (selNode) {
+      rows.push(`  ${theme.bold("Experiment:")} ${selNode.title || "(untitled)"}`);
+      rows.push("");
+      const mdLines = renderMarkdown(selNode.experimentResult || "(no result)", W);
+      for (const l of mdLines) rows.push(clipToWidth(l, W));
+    } else {
+      rows.push(theme.muted("  No experiment selected."));
+    }
+    rows.push("");
+    rows.push(theme.muted("  [Esc] back to tree  [↑↓] scroll (not yet)  [q] quit"));
+    process.stdout.write("\x1b[2J\x1b[H" + rows.slice(0, R - 1).join("\n"));
+    return;
+  }
+
+  // ── Normal tree view ──
   const treeLines = renderTree(state.project, state.selectedId, W);
   const selNode = state.selectedId ? state.project.nodes[state.selectedId] ?? null : null;
 
@@ -189,34 +213,19 @@ function render(): void {
   const dirty = state.isDirty ? " *" : "";
   const modelTag = theme.muted(` [${state.experimentConfig.provider}/${state.experimentConfig.model}]`);
   const runningTag = state.isRunning ? theme.running(" ⏳ Running...") : "";
-  rows.push(clipLine(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W));
+  rows.push(clipToWidth(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W));
   rows.push(theme.muted("─".repeat(W)));
 
   const visibleTree = treeLines.slice(0, maxTree);
-  for (const line of visibleTree) rows.push(clipLine(line, W));
+  for (const line of visibleTree) rows.push(clipToWidth(line, W));
   while (rows.length < 2 + maxTree) rows.push("");
 
   rows.push(theme.muted("─".repeat(W)));
-  for (const line of detail) rows.push(clipLine(line, W));
-  for (const line of middle) rows.push(clipLine(line, W));
-  for (const line of footer) rows.push(clipLine(line, W));
+  for (const line of detail) rows.push(clipToWidth(line, W));
+  for (const line of middle) rows.push(clipToWidth(line, W));
+  for (const line of footer) rows.push(clipToWidth(line, W));
 
   process.stdout.write("\x1b[2J\x1b[H" + rows.slice(0, R - 1).join("\n"));
-}
-
-function clipLine(s: string, maxW: number): string {
-  let out = "", vis = 0;
-  for (let i = 0; i < s.length && vis < maxW; i++) {
-    if (s[i] === "\x1b" && s.slice(i).match(/^\x1b\[[0-9;]*m/)) {
-      const m = s.slice(i).match(/^\x1b\[[0-9;]*m/)!;
-      out += m[0]; i += m[0].length - 1; continue;
-    }
-    const cp = s.codePointAt(i) ?? 0;
-    vis += (cp > 127 && cp < 0x20000) || cp >= 0x20000 ? 2 : 1;
-    if (vis > maxW) break;
-    out += s[i];
-  }
-  return out;
 }
 
 // ─── Keyboard ─────────────────────────────────────────────
@@ -352,7 +361,16 @@ process.stdin.on("keypress", async (_str, key) => {
       }
       break;
     case "escape":
-      selectNode(state, null); render();
+      if (viewMode === "result") { viewMode = "tree"; render(); }
+      else { selectNode(state, null); render(); }
+      break;
+    case "m":
+      if (!state.isRunning && state.selectedId) {
+        const rn = state.project.nodes[state.selectedId];
+        if (rn?.type === "experiment" && rn.experimentResult) {
+          viewMode = "result"; render();
+        }
+      }
       break;
     default:
       break;

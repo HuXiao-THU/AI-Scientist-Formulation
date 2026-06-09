@@ -1,18 +1,17 @@
 import type { ISTNode } from "../core/types.js";
 import { theme } from "./theme.js";
-import { truncateToWidth } from "../utils/truncate.js";
+import { truncateToWidth, stripAnsi, visualWidth } from "../utils/truncate.js";
 
-/** Render compact selected-node detail (fits in ~4-6 lines, no border box). */
+/** Render compact selected-node detail (always exactly 6 lines). */
 export function renderNodeDetail(
   node: ISTNode | null,
   width: number,
-  isRunning: boolean
+  _isRunning: boolean
 ): string[] {
-  const lines: string[] = [];
   const maxW = Math.max(40, width - 2);
 
   if (!node) {
-    lines.push(theme.muted("  No node selected."));
+    const lines: string[] = [theme.muted("  No node selected.")];
     while (lines.length < 6) lines.push("");
     return lines;
   }
@@ -25,55 +24,35 @@ export function renderNodeDetail(
   if (node.type === "experiment") {
     const s = node.runStatus || "idle";
     const sc: Record<string, (s: string) => string> = {
-      running: theme.running,
-      done: theme.done,
-      failed: theme.failed,
-      idle: theme.idle,
+      running: theme.running, done: theme.done, failed: theme.failed, idle: theme.idle,
     };
     line1 += `  Status: ${sc[s]?.(s) ?? s}`;
   }
   if (node.gitBranch) line1 += `  Branch: ${theme.muted(node.gitBranch)}`;
-  lines.push(truncateToWidth(line1, maxW));
+  const lines: string[] = [truncateToWidth(line1, maxW)];
 
   // Line 2: title
-  const title = node.title || theme.muted("(untitled)");
+  let title = node.title || theme.muted("(untitled)");
+  // Truncate to one visual line
+  title = truncateToWidth(stripAnsi(title), maxW);
   lines.push(`  ${theme.bold("Title:")} ${title}`);
 
-  // Line 3-5: description (wrapped)
+  // Remaining lines: description or result summary
   const desc = node.description || theme.muted("(no description)");
-  const descWrapped = wrapText(desc, maxW - 2, "    ");
-  for (const dl of descWrapped.slice(0, 3)) {
-    lines.push(dl);
-  }
+  const descFirstLine = desc.split("\n")[0];
+  const shortDesc = truncateToWidth(descFirstLine, maxW - 2);
+  lines.push(`    ${shortDesc}`);
 
-  // If experiment and has result, show summary
+  // If experiment with result, show one-line result hint
   if (node.type === "experiment" && node.experimentResult) {
-    const result = truncateToWidth(node.experimentResult, maxW - 10);
-    lines.push(`  ${theme.bold("Result:")} ${theme.muted(result)}`);
+    const firstLine = node.experimentResult.split("\n")[0];
+    lines.push(`  ${theme.bold("Result:")} ${theme.muted(truncateToWidth(firstLine, maxW - 10))}`);
+    lines.push(theme.accent(`  [m] View full result (${node.experimentResult.length} chars)`));
+  } else if (node.type === "experiment") {
+    lines.push(theme.muted("  No result yet."));
   }
 
-  // Fill to consistent height
+  // Pad to exactly 6 lines
   while (lines.length < 6) lines.push("");
-
-  return lines;
+  return lines.slice(0, 6);
 }
-
-/** Simple word-wrap preserving ANSI codes */
-function wrapText(text: string, maxWidth: number, indent: string): string[] {
-  const lines: string[] = [];
-  const words = text.split(/\s+/);
-  let line = indent;
-  for (const word of words) {
-    const cleanLen = line.replace(/\x1b\[[0-9;]*m/g, "").length;
-    if (cleanLen + word.length + 1 > maxWidth && cleanLen > indent.length) {
-      lines.push(line);
-      line = indent + word;
-    } else {
-      line += (line.length > indent.length ? " " : "") + word;
-    }
-  }
-  if (line.length > indent.length) lines.push(line);
-  if (lines.length === 0) lines.push(indent + text);
-  return lines;
-}
-

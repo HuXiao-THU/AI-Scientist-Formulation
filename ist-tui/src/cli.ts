@@ -98,38 +98,37 @@ function render(): void {
   for (let i = 0; i < DETAIL_LINES; i++) detail.push(dl[i] ?? "");
 
   // Calculate space for tree
-  const fixedBelow = detail.length + 1 + middle.length + footer.length; // +1 for detail sep
-  const headerLines = 2; // status + header sep
-  const available = R - headerLines - fixedBelow;
-  const treeToShow = Math.max(5, available);
+  const fixedBelow = detail.length + 1 + middle.length + footer.length;
+  const headerLines = 2;
+  const maxTree = Math.max(5, R - 1 - headerLines - fixedBelow);
 
-  // Build output
-  let out = "\x1b[2J\x1b[H";
+  // Collect all output lines into an array (no trailing \n on last line)
+  const rows: string[] = [];
 
   // Status
   const label = state.filePath ?? "Untitled";
   const dirty = state.isDirty ? " *" : "";
   const modelTag = theme.muted(` [${state.experimentConfig.provider}/${state.experimentConfig.model}]`);
   const runningTag = state.isRunning ? theme.running(" ⏳ Running...") : "";
-  out += clipLine(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W) + "\n";
-  out += theme.muted("─".repeat(W)) + "\n";
+  rows.push(clipLine(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W));
+  rows.push(theme.muted("─".repeat(W)));
 
-  // Tree (visible portion)
-  const visibleTree = treeLines.slice(0, treeToShow);
-  for (const line of visibleTree) out += clipLine(line, W) + "\n";
-  for (let i = visibleTree.length; i < treeToShow; i++) out += "\n";
+  // Tree
+  const visibleTree = treeLines.slice(0, maxTree);
+  for (const line of visibleTree) rows.push(clipLine(line, W));
+  while (rows.length < headerLines + maxTree) rows.push("");
 
-  // Detail separator + detail
-  out += theme.muted("─".repeat(W)) + "\n";
-  for (const line of detail) out += clipLine(line, W) + "\n";
+  // Detail + middle + footer
+  rows.push(theme.muted("─".repeat(W)));
+  for (const line of detail) rows.push(clipLine(line, W));
+  for (const line of middle) rows.push(clipLine(line, W));
+  for (const line of footer) rows.push(clipLine(line, W));
 
-  // Middle
-  for (const line of middle) out += clipLine(line, W) + "\n";
+  // Trim to R-1 lines (last row reserved for cursor to prevent scroll)
+  const trimmed = rows.slice(0, R - 1);
 
-  // Footer
-  for (const line of footer) out += clipLine(line, W) + "\n";
-
-  process.stdout.write(out);
+  // Write: clear screen, then lines joined by \n (no trailing newline)
+  process.stdout.write("\x1b[2J\x1b[H" + trimmed.join("\n"));
 }
 
 /** Clip a line to visual width, preserving ANSI codes */

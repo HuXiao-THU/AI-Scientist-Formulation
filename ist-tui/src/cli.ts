@@ -85,11 +85,13 @@ function render(): void {
   // Render detail panel
   const detailLines = renderNodeDetail(selectedNode, detailWidth, state.isRunning);
 
-  // Render side by side
+  // Render side by side — pad missing lines to keep alignment
+  const emptyTreePad = " ".repeat(treeWidth);
+  const emptyDetailPad = " ".repeat(detailWidth);
   const mainHeight = Math.max(treeLines.length, detailLines.length, treeHeight);
   for (let i = 0; i < mainHeight; i++) {
-    const treeLine = treeLines[i] ?? "";
-    const detailLine = detailLines[i] ?? "";
+    const treeLine = treeLines[i] ?? emptyTreePad;
+    const detailLine = detailLines[i] ?? emptyDetailPad;
     output += treeLine + detailLine + "\n";
   }
 
@@ -194,8 +196,17 @@ process.stdin.on("keypress", async (_str, key) => {
       if (state.selectedId) {
         const node = state.project.nodes[state.selectedId];
         if (node) {
-          editingField = "title";
-          editingValue = node.title;
+          // Cycle: nothing → title → description → exit
+          if (!editingField) {
+            editingField = "title";
+            editingValue = node.title;
+          } else if (editingField === "title") {
+            editingField = "description";
+            editingValue = node.description;
+          } else {
+            editingField = null;
+            editingValue = "";
+          }
           render();
         }
       }

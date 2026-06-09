@@ -46,10 +46,11 @@ export interface EditingState {
 }
 
 export function createAppState(): AppState {
+  const project = createProject();
   return {
-    project: createProject(),
+    project,
     filePath: null,
-    selectedId: null,
+    selectedId: project.rootNodeId,
     isDirty: false,
     isRunning: false,
     experimentLog: new ExperimentLog(),
@@ -230,14 +231,22 @@ export function getVisibleNodes(state: AppState): string[] {
 export function navigateUp(state: AppState): void {
   const visible = getVisibleNodes(state);
   if (visible.length === 0) return;
-  const idx = visible.indexOf(state.selectedId ?? "");
+  if (!state.selectedId) {
+    state.selectedId = visible[visible.length - 1];
+    return;
+  }
+  const idx = visible.indexOf(state.selectedId);
   if (idx > 0) state.selectedId = visible[idx - 1];
 }
 
 export function navigateDown(state: AppState): void {
   const visible = getVisibleNodes(state);
   if (visible.length === 0) return;
-  const idx = visible.indexOf(state.selectedId ?? "");
+  if (!state.selectedId) {
+    state.selectedId = visible[0];
+    return;
+  }
+  const idx = visible.indexOf(state.selectedId);
   if (idx >= 0 && idx < visible.length - 1) {
     state.selectedId = visible[idx + 1];
   }

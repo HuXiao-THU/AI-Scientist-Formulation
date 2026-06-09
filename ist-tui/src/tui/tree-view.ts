@@ -12,21 +12,14 @@ export interface FlatNode {
   continues: boolean[];
 }
 
-/** Flatten the project tree for display. Selected node gets highlighted path. */
+/** Flatten the project tree for display. */
 export function flattenTree(
   project: ISTProject,
-  selectedId: string | null
+  _selectedId: string | null
 ): FlatNode[] {
   const result: FlatNode[] = [];
   const root = project.nodes[project.rootNodeId];
   if (!root) return result;
-
-  // Build the set of ancestors for the selected node (for path highlighting)
-  const selectedPath = new Set<string>();
-  if (selectedId) {
-    const path = getPathToRoot(project, selectedId);
-    for (const n of path) selectedPath.add(n.id);
-  }
 
   const stack: {
     nodeId: string;
@@ -79,18 +72,26 @@ export function renderTree(
   const flatNodes = flattenTree(project, selectedId);
   const lines: string[] = [];
 
-  // Render root node first
+  // Compute path from root to selected node for branch highlighting
+  const selectedPath = new Set<string>();
+  if (selectedId) {
+    const path = getPathToRoot(project, selectedId);
+    for (const n of path) selectedPath.add(n.id);
+  }
+
+  // Render root node first (always on path)
   const root = project.nodes[project.rootNodeId];
   if (root) {
     const isSelected = root.id === selectedId;
-    const line = renderNodeLine(root, isSelected, "", width);
+    const line = renderNodeLine(root, isSelected, true, "", width);
     lines.push(line);
   }
 
   for (const fn of flatNodes) {
     const isSelected = fn.node.id === selectedId;
+    const onPath = selectedPath.has(fn.node.id);
     const prefix = buildTreePrefix(fn.indent, fn.isLast, fn.continues);
-    const line = renderNodeLine(fn.node, isSelected, prefix, width);
+    const line = renderNodeLine(fn.node, isSelected, onPath, prefix, width);
     lines.push(line);
   }
 
@@ -121,6 +122,7 @@ function buildTreePrefix(
 function renderNodeLine(
   node: ISTNode,
   isSelected: boolean,
+  onPath: boolean,
   treePrefix: string,
   width: number
 ): string {
@@ -141,20 +143,21 @@ function renderNodeLine(
         statusIcon = theme.idle("○");
     }
   } else {
-    statusIcon = theme.idea("●");
+    statusIcon = onPath ? theme.idea("●") : theme.idle("○");
   }
 
   // Type badge
   const badge =
     node.type === "idea" ? theme.badge.idea("[I]") : theme.badge.experiment("[E]");
 
-  // Title text
+  // Title text — dim non-path nodes
   const title = node.title || "(untitled)";
   const maxTitleWidth = Math.max(10, width - treePrefix.length - 12);
   const truncatedTitle = truncateToWidth(title, maxTitleWidth);
+  const displayTitle = onPath ? truncatedTitle : theme.muted(truncatedTitle);
 
   // Build line
-  let line = `${treePrefix}${statusIcon} ${badge} ${truncatedTitle}`;
+  let line = `${treePrefix}${statusIcon} ${badge} ${displayTitle}`;
 
   // Highlight selected
   if (isSelected) {

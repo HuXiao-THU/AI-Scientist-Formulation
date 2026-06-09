@@ -56,8 +56,9 @@ export function createAppState(): AppState {
     isRunning: false,
     experimentLog: new ExperimentLog(),
     experimentConfig: {
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      baseUrl: "https://api.deepseek.com/v1",
     },
     error: null,
     editing: null,

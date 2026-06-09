@@ -83,9 +83,10 @@ function render(): void {
   // ── Status ──
   const label = state.filePath ?? "Untitled";
   const dirty = state.isDirty ? " *" : "";
+  const modelTag = theme.muted(` [${state.experimentConfig.provider}/${state.experimentConfig.model}]`);
   const runningTag = state.isRunning ? theme.running(" ⏳ Running...") : "";
-  out += `${theme.bold("IST")} ${theme.muted(label + dirty)}${runningTag}`;
-  out += " ".repeat(Math.max(0, W - label.length - dirty.length - 22)) + "\n";
+  out += `${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`;
+  out += " ".repeat(Math.max(0, W - label.length - dirty.length - 40)) + "\n";
   out += theme.muted("─".repeat(W)) + "\n";
 
   // ── Tree ──
@@ -219,6 +220,7 @@ process.stdin.on("keypress", async (_str, key) => {
         const p = cliFilePath ?? path.join(process.cwd(), "project.ist");
         saveAs(state, p);
         cliFilePath = p;
+        state.error = `Saved to ${p}`;
       }
       render();
       break;

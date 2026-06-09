@@ -55,23 +55,40 @@ export function buildUserPrompt(_node: ISTNode): string {
 // ─── Model resolution ─────────────────────────────────────
 
 function resolveModel(config: ExperimentConfig): Model<any> {
+  const { provider, model: modelId, baseUrl } = config;
+
+  // Try built-in lookup first (works for anthropic, openai, etc.)
   try {
-    const m = getModel(config.provider as any, config.model as any);
-    if (m) return config.baseUrl ? { ...m, baseUrl: config.baseUrl } : m;
+    const m = getModel(provider as any, modelId as any);
+    if (m) return baseUrl ? { ...m, baseUrl } : m;
   } catch { /* fall through */ }
-  // Fallback minimal model
+
+  // Manual construction for providers not in registry (e.g. deepseek direct API)
   return {
-    id: config.model,
-    name: config.model,
-    api: "anthropic" as any,
-    provider: config.provider,
-    baseUrl: config.baseUrl ?? "https://api.anthropic.com",
-    reasoning: false,
+    id: modelId,
+    name: modelId,
+    api: provider === "deepseek" ? "openai-completions" as any : "anthropic" as any,
+    provider,
+    baseUrl: baseUrl ?? "https://api.deepseek.com/v1",
+    reasoning: modelId.includes("reasoner") || modelId.includes("r1"),
     input: ["text" as const],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200_000,
+    contextWindow: 128_000,
     maxTokens: 32_000,
   };
+}
+
+// ─── API key ──────────────────────────────────────────────
+
+function pickApiKey(provider: string): string | undefined {
+  switch (provider) {
+    case "deepseek":  return process.env.DEEPSEEK_API_KEY;
+    case "openai":    return process.env.OPENAI_API_KEY;
+    case "anthropic": return process.env.ANTHROPIC_API_KEY;
+    default:          return process.env.DEEPSEEK_API_KEY
+                        ?? process.env.OPENAI_API_KEY
+                        ?? process.env.ANTHROPIC_API_KEY;
+  }
 }
 
 // ─── Text extraction ──────────────────────────────────────
@@ -104,8 +121,7 @@ export function createAgent(
     initialState: { model, systemPrompt: "", tools },
     streamFn: async (m, ctx, opts) => {
       const apiKey = config.apiKey
-        ?? process.env.ANTHROPIC_API_KEY
-        ?? process.env.OPENAI_API_KEY;
+        ?? pickApiKey(config.provider);
       return streamSimple(m, ctx, { ...opts, apiKey } as any);
     },
   });

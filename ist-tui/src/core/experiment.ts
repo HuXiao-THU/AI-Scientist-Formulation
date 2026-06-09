@@ -1,22 +1,20 @@
 import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
 import { getModel, streamSimple, type Model } from "@earendil-works/pi-ai";
+import { mkdirSync } from "node:fs";
 import type {
-  ISTProject,
-  ISTNode,
-  ExperimentConfig,
-  ExperimentLogEvent,
-  ExperimentRunResult,
+  ISTProject, ISTNode, ExperimentConfig,
+  ExperimentLogEvent, ExperimentRunResult,
 } from "./types.js";
 import { getPathToRoot } from "./tree-model.js";
+import { createISTTools } from "./tools.js";
 import { safeErrorMessage } from "../utils/truncate.js";
 
 export type LogCallback = (event: ExperimentLogEvent) => void;
 
-function ts(): string {
-  return new Date().toISOString();
-}
+function ts(): string { return new Date().toISOString(); }
 
-/** Build the system prompt describing the IST research context */
+// ─── Prompt builders ──────────────────────────────────────
+
 export function buildSystemPrompt(
   project: ISTProject,
   node: ISTNode,
@@ -29,7 +27,7 @@ export function buildSystemPrompt(
   });
 
   return [
-    "You are an autonomous research agent running an experiment in a local workspace.",
+    "You are an autonomous research agent running a scientific experiment.",
     "",
     "## Research Path (root → current experiment)",
     ...pathLines,
@@ -37,37 +35,30 @@ export function buildSystemPrompt(
     "## Experiment Task",
     node.description.trim() || node.title.trim() || "(no description provided)",
     "",
-    "## Workspace Rules",
+    "## Workspace",
     `- Work inside: ${workspacePath}`,
     "- Write code, run experiments, analyze results.",
-    "- When finished, write RESULT.md summarizing key findings, metrics, and output file paths.",
+    "- When finished, create RESULT.md summarizing key findings, metrics, and output file paths.",
     "- Keep changes reproducible.",
   ].join("\n");
 }
 
-/** Build the user prompt that kicks off the experiment */
-export function buildUserPrompt(node: ISTNode): string {
+export function buildUserPrompt(_node: ISTNode): string {
   return [
-    "Execute the experiment described in the system prompt.",
-    "Write and run code as needed. Analyze results.",
+    "Execute the experiment described above.",
+    "Write and run code as needed. Analyze the results.",
     "When done, create RESULT.md with a concise summary of your approach, key metrics, and output files.",
   ].join("\n");
 }
 
-/** Resolve a Model from pi-ai's built-in registry, or construct a minimal one */
+// ─── Model resolution ─────────────────────────────────────
+
 function resolveModel(config: ExperimentConfig): Model<any> {
-  // Try built-in lookup first
   try {
     const m = getModel(config.provider as any, config.model as any);
-    if (m) {
-      // Apply baseUrl override if provided
-      return config.baseUrl ? { ...m, baseUrl: config.baseUrl } : m;
-    }
-  } catch {
-    // Fall through to manual construction
-  }
-
-  // Construct minimal model for unknown providers
+    if (m) return config.baseUrl ? { ...m, baseUrl: config.baseUrl } : m;
+  } catch { /* fall through */ }
+  // Fallback minimal model
   return {
     id: config.model,
     name: config.model,
@@ -82,44 +73,39 @@ function resolveModel(config: ExperimentConfig): Model<any> {
   };
 }
 
-/** Extract text content from an agent message */
+// ─── Text extraction ──────────────────────────────────────
+
 function extractText(msg: { content?: unknown }): string {
-  const content = msg.content;
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter(
-        (b): b is { type: "text"; text: string } =>
-          typeof b === "object" && b !== null && (b as any).type === "text"
-      )
-      .map((b) => b.text)
-      .join("\n");
+  const c = msg.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    return c
+      .filter((b): b is { type: "text"; text: string } =>
+        typeof b === "object" && b !== null && (b as any).type === "text")
+      .map(b => b.text).join("\n");
   }
   return "";
 }
 
-/** Create an Agent with IST event logging */
+// ─── Agent factory ────────────────────────────────────────
+
 export function createAgent(
   config: ExperimentConfig,
-  onLog: LogCallback
+  workspacePath: string,
+  onLog: LogCallback,
 ): Agent {
   const model = resolveModel(config);
 
+  // Create workspace tools
+  const tools = createISTTools({ cwd: workspacePath, workspacePath });
+
   const agent = new Agent({
-    initialState: {
-      model,
-      systemPrompt: "",
-      tools: [],
-    },
-    streamFn: async (m, context, options) => {
-      const apiKey =
-        config.apiKey ??
-        process.env.ANTHROPIC_API_KEY ??
-        process.env.OPENAI_API_KEY;
-      return streamSimple(m, context, {
-        ...options,
-        apiKey,
-      });
+    initialState: { model, systemPrompt: "", tools },
+    streamFn: async (m, ctx, opts) => {
+      const apiKey = config.apiKey
+        ?? process.env.ANTHROPIC_API_KEY
+        ?? process.env.OPENAI_API_KEY;
+      return streamSimple(m, ctx, { ...opts, apiKey } as any);
     },
   });
 
@@ -127,31 +113,21 @@ export function createAgent(
   agent.subscribe((event: AgentEvent) => {
     switch (event.type) {
       case "tool_execution_start":
-        onLog({
-          type: "tool_start",
-          timestamp: ts(),
-          message: `🔧 ${event.toolName}`,
-          details: event.args,
-        });
+        onLog({ type: "tool_start", timestamp: ts(), message: `🔧 ${event.toolName}`, details: event.args });
         break;
       case "tool_execution_end":
-        onLog({
-          type: "tool_end",
-          timestamp: ts(),
-          message: `✓ ${event.toolName}${event.isError ? " (error)" : ""}`,
-          details: event.result,
-        });
+        onLog({ type: "tool_end", timestamp: ts(), message: `✓ ${event.toolName}${event.isError ? " (error)" : ""}`, details: event.result });
         break;
       case "message_update":
         if (event.message.role === "assistant") {
           const text = extractText(event.message);
-          if (text) {
-            onLog({ type: "assistant", timestamp: ts(), message: text });
-          }
+          if (text) onLog({ type: "assistant", timestamp: ts(), message: text });
         }
         break;
       case "agent_end":
         onLog({ type: "done", timestamp: ts(), message: "Experiment finished." });
+        break;
+      default:
         break;
     }
   });
@@ -159,38 +135,33 @@ export function createAgent(
   return agent;
 }
 
-/** Run a single experiment */
+// ─── Experiment runner ────────────────────────────────────
+
 export async function runExperiment(
   project: ISTProject,
   node: ISTNode,
   workspacePath: string,
   config: ExperimentConfig,
   onLog: LogCallback,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ExperimentRunResult> {
+  // Ensure workspace exists
+  mkdirSync(workspacePath, { recursive: true });
+
   try {
     const systemPrompt = buildSystemPrompt(project, node, workspacePath);
     const userPrompt = buildUserPrompt(node);
-    const agent = createAgent(config, onLog);
+    const agent = createAgent(config, workspacePath, onLog);
 
     agent.state.systemPrompt = systemPrompt;
 
     if (signal) {
-      signal.addEventListener(
-        "abort",
-        () => { agent.abort(); },
-        { once: true }
-      );
+      signal.addEventListener("abort", () => agent.abort(), { once: true });
     }
 
     await agent.waitForIdle();
 
-    onLog({
-      type: "assistant",
-      timestamp: ts(),
-      message: "🚀 Starting experiment...\n",
-    });
-
+    onLog({ type: "assistant", timestamp: ts(), message: "🚀 Starting experiment...\n" });
     await agent.prompt(userPrompt);
     await agent.waitForIdle();
 

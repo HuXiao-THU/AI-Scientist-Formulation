@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { loadEnv } from "./core/env.js";
-loadEnv(); // Load .env before anything else
+loadEnv();
 
 import * as readline from "node:readline";
 import * as path from "node:path";
@@ -21,37 +21,102 @@ import { fileExists } from "./core/ist-file.js";
 
 let W = process.stdout.columns || 120;
 let R = process.stdout.rows || 40;
-process.stdout.on("resize", () => {
-  W = process.stdout.columns || 120;
-  R = process.stdout.rows || 40;
-  render();
-});
-
+process.stdout.on("resize", () => { W = process.stdout.columns || 120; R = process.stdout.rows || 40; render(); });
 process.stdout.write("\x1b[?25l");
 process.on("exit", () => process.stdout.write("\x1b[?25h\x1b[2J\x1b[H"));
-
-if (!process.stdin.isTTY) {
-  console.error("IST requires a terminal (TTY).");
-  process.exit(1);
-}
+if (!process.stdin.isTTY) { console.error("IST requires a terminal (TTY)."); process.exit(1); }
 
 // ─── State ────────────────────────────────────────────────
 
 let state: AppState = createAppState();
 let editingField: "title" | "description" | null = null;
 let editingValue = "";
+let cursorPos = 0; // character index within editingValue
 
 const args = process.argv.slice(2);
 let cliFilePath: string | null = null;
 if (args.length > 0) {
   const given = path.resolve(args[0]);
-  if (fileExists(given)) {
-    open(state, given);
-    cliFilePath = given;
-  } else if (args[0].endsWith(".ist")) {
-    // New file path specified
-    cliFilePath = given;
+  if (fileExists(given)) { open(state, given); cliFilePath = given; }
+  else if (args[0].endsWith(".ist")) { cliFilePath = given; }
+}
+
+// ─── Description Editor Helpers ───────────────────────────
+
+/** Get (line index, col index) for a character position within text */
+function getLineCol(text: string, pos: number): { line: number; col: number } {
+  let line = 0, col = 0;
+  for (let i = 0; i < pos && i < text.length; i++) {
+    if (text[i] === "\n") { line++; col = 0; }
+    else col++;
   }
+  return { line, col };
+}
+
+/** Convert (line, col) back to character position */
+function getPosFromLineCol(text: string, line: number, col: number): number {
+  let ln = 0, ci = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (ln === line) {
+      if (ci >= col) return i;
+      if (text[i] === "\n") return i;
+      ci++;
+    } else if (text[i] === "\n") {
+      ln++;
+    }
+  }
+  return text.length;
+}
+
+/** Wrap text to visual width, returning array of {text, startPos} for each display line */
+function wrapLines(text: string, maxW: number): { text: string; startPos: number }[] {
+  const result: { text: string; startPos: number }[] = [];
+  const logicalLines = text.split("\n");
+  let pos = 0;
+  for (const ll of logicalLines) {
+    const lineStart = pos;
+    if (ll.length === 0) {
+      result.push({ text: "", startPos: lineStart });
+      pos += 1; // the \n
+      continue;
+    }
+    let wrapped = "";
+    let wrappedStart = lineStart;
+    let visW = 0;
+    for (let i = 0; i < ll.length; i++) {
+      const ch = ll[i];
+      const cp = ch.codePointAt(0) ?? 0;
+      const cw = (cp > 127 && cp < 0x20000) || cp >= 0x20000 ? 2 : 1;
+      if (visW + cw > maxW && wrapped.length > 0) {
+        result.push({ text: wrapped, startPos: wrappedStart });
+        wrapped = "";
+        wrappedStart = lineStart + i;
+        visW = 0;
+      }
+      wrapped += ch;
+      visW += cw;
+    }
+    if (wrapped.length > 0 || result.length === 0 || result[result.length - 1].text.length > 0) {
+      result.push({ text: wrapped, startPos: wrappedStart });
+    }
+    pos += ll.length + 1; // +1 for \n
+  }
+  return result;
+}
+
+/** Find which display line and column the cursor is on */
+function cursorDisplayPos(wrapped: { text: string; startPos: number }[], pos: number): { dispLine: number; dispCol: number } {
+  for (let i = 0; i < wrapped.length; i++) {
+    const w = wrapped[i];
+    const endPos = w.startPos + w.text.length;
+    if (pos >= w.startPos && pos <= endPos) {
+      return { dispLine: i, dispCol: pos - w.startPos };
+    }
+  }
+  // Default to end
+  const last = wrapped[wrapped.length - 1];
+  if (last) return { dispLine: wrapped.length - 1, dispCol: last.text.length };
+  return { dispLine: 0, dispCol: 0 };
 }
 
 // ─── Render ──────────────────────────────────────────────
@@ -62,50 +127,64 @@ function render(): void {
   const treeLines = renderTree(state.project, state.selectedId, W);
   const selNode = state.selectedId ? state.project.nodes[state.selectedId] ?? null : null;
 
-  // Build fixed sections (bottom-up to determine remaining space)
+  // Footer
   const footer: string[] = [];
   if (editingField) {
-    footer.push(theme.muted("  Enter/Esc confirm  Tab switch field  Backspace delete"));
+    if (editingField === "title") {
+      footer.push(theme.accent(`  Editing title: `) + editingValue.slice(-(W - 25)));
+    } else {
+      const lc = getLineCol(editingValue, cursorPos);
+      footer.push(theme.accent(`  Editing description | Line ${lc.line + 1}, Col ${lc.col + 1}`) +
+        theme.muted("  [←→↑↓] move  [Esc] save  [Tab] switch"));
+    }
   } else {
     footer.push(theme.muted("  ↑↓ nav  i idea  e exp  r run  s save  Tab edit  del  q quit"));
+    if (state.error) footer.unshift(theme.failed(`  ${state.error}`));
   }
 
-  if (editingField === "title") {
-    const trimmed = editingValue.length > W - 20 ? editingValue.slice(-(W - 25)) + "…" : editingValue;
-    footer.unshift(theme.accent(`  Editing title: `) + trimmed);
-  } else if (editingField === "description") {
-    footer.unshift(theme.accent("  Editing description" + theme.muted("  [Enter] newline  [Esc/Ctrl+Enter] finish  [Tab] switch")));
-  }
-
-  if (state.error) footer.unshift(theme.failed(`  ${state.error}`));
-
-  // Middle section
+  // Middle section (description editor or log)
   const middle: string[] = [];
   if (state.isRunning) {
     middle.push(theme.muted("─".repeat(W)));
     middle.push(...renderLogPanel(state.experimentLog, W));
   } else if (editingField === "description") {
-    middle.push(theme.muted("─".repeat(W)));
-    middle.push(theme.accent("  Description preview:"));
-    const pv = editingValue.split("\n");
-    for (const pl of pv.slice(-6)) middle.push(theme.accent("  │ ") + pl);
-    for (let i = pv.length; i < 6; i++) middle.push(theme.accent("  │"));
+    middle.push(theme.muted("─".repeat(W) + " Description " + "─".repeat(Math.max(0, W - 14))));
+    // Word-wrap and show with cursor
+    const wrapW = W - 4;
+    const wrapped = wrapLines(editingValue, wrapW);
+    const cur = cursorDisplayPos(wrapped, cursorPos);
+    for (let i = 0; i < wrapped.length; i++) {
+      let line = theme.accent("  │ ");
+      if (i === cur.dispLine) {
+        // Insert cursor (reverse video) into this line
+        const txt = wrapped[i].text;
+        const col = Math.min(cur.dispCol, txt.length);
+        const before = txt.slice(0, col);
+        const at = txt[col] || " ";
+        const after = txt.slice(col + 1);
+        line += before + "\x1b[7m" + at + "\x1b[27m" + after;
+      } else {
+        line += wrapped[i].text;
+      }
+      middle.push(line);
+    }
+    // If cursor is past the last line, show cursor on a new empty line
+    if (cur.dispLine >= wrapped.length) {
+      middle.push(theme.accent("  │ ") + "\x1b[7m \x1b[27m");
+    }
   }
 
-  // Detail (fixed 6 lines)
+  // Detail
   const detail: string[] = [];
   const dl = renderNodeDetail(selNode, W, state.isRunning);
   for (let i = 0; i < DETAIL_LINES; i++) detail.push(dl[i] ?? "");
 
-  // Calculate space for tree
+  // Tree space
   const fixedBelow = detail.length + 1 + middle.length + footer.length;
-  const headerLines = 2;
-  const maxTree = Math.max(5, R - 1 - headerLines - fixedBelow);
+  const maxTree = Math.max(5, R - 1 - 2 - fixedBelow);
 
-  // Collect all output lines into an array (no trailing \n on last line)
+  // Build rows
   const rows: string[] = [];
-
-  // Status
   const label = state.filePath ?? "Untitled";
   const dirty = state.isDirty ? " *" : "";
   const modelTag = theme.muted(` [${state.experimentConfig.provider}/${state.experimentConfig.model}]`);
@@ -113,64 +192,29 @@ function render(): void {
   rows.push(clipLine(`${theme.bold("IST")} ${theme.muted(label + dirty)}${modelTag}${runningTag}`, W));
   rows.push(theme.muted("─".repeat(W)));
 
-  // Tree
   const visibleTree = treeLines.slice(0, maxTree);
   for (const line of visibleTree) rows.push(clipLine(line, W));
-  while (rows.length < headerLines + maxTree) rows.push("");
+  while (rows.length < 2 + maxTree) rows.push("");
 
-  // Detail + middle + footer
   rows.push(theme.muted("─".repeat(W)));
   for (const line of detail) rows.push(clipLine(line, W));
   for (const line of middle) rows.push(clipLine(line, W));
   for (const line of footer) rows.push(clipLine(line, W));
 
-  // Trim to R-1 lines (last row reserved for cursor to prevent scroll)
-  const trimmed = rows.slice(0, R - 1);
-
-  // Write: clear screen, then lines joined by \n (no trailing newline)
-  process.stdout.write("\x1b[2J\x1b[H" + trimmed.join("\n"));
+  process.stdout.write("\x1b[2J\x1b[H" + rows.slice(0, R - 1).join("\n"));
 }
 
-/** Clip a line to visual width, preserving ANSI codes */
 function clipLine(s: string, maxW: number): string {
-  let out = "";
-  let vis = 0;
+  let out = "", vis = 0;
   for (let i = 0; i < s.length && vis < maxW; i++) {
     if (s[i] === "\x1b" && s.slice(i).match(/^\x1b\[[0-9;]*m/)) {
       const m = s.slice(i).match(/^\x1b\[[0-9;]*m/)!;
-      out += m[0];
-      i += m[0].length - 1;
-      continue;
+      out += m[0]; i += m[0].length - 1; continue;
     }
     const cp = s.codePointAt(i) ?? 0;
     vis += (cp > 127 && cp < 0x20000) || cp >= 0x20000 ? 2 : 1;
     if (vis > maxW) break;
     out += s[i];
-  }
-  return out;
-}
-
-/** Truncate to visual width, preserving ANSI codes */
-function truncateToVisualWidth(s: string, maxW: number): string {
-  const ansi = /\x1b\[[0-9;]*m/g;
-  let out = "";
-  let visW = 0;
-  let i = 0;
-  while (i < s.length) {
-    const rem = s.slice(i);
-    const m = rem.match(ansi);
-    if (m && m.index === 0) {
-      out += m[0];
-      i += m[0].length;
-      continue;
-    }
-    const ch = s[i];
-    const cp = ch.codePointAt(0) ?? 0;
-    const cw = (cp >= 0x1100 && cp <= 0xffff && cp > 127) || cp >= 0x20000 ? 2 : 1;
-    if (visW + cw > maxW) break;
-    out += ch;
-    visW += cw;
-    i++;
   }
   return out;
 }
@@ -184,50 +228,86 @@ process.stdin.on("keypress", async (_str, key) => {
   // ── Editing mode ──
   if (editingField) {
     const node = state.selectedId ? state.project.nodes[state.selectedId] : null;
-    switch (key.name) {
-      case "return":
-      case "enter":
-        if (key.ctrl) {
-          // Ctrl+Enter = confirm (useful for description)
-          if (node) {
-            if (editingField === "title") updateSelectedTitle(state, editingValue);
-            else updateSelectedDescription(state, editingValue);
-          }
-          editingField = null; editingValue = ""; render(); return;
-        }
-        if (editingField === "description") {
-          // Enter in description mode = insert newline
-          editingValue += "\n";
+
+    // Description: cursor-based editing
+    if (editingField === "description") {
+      switch (key.name) {
+        case "escape":
+          if (node) updateSelectedDescription(state, editingValue);
+          editingField = null; editingValue = ""; cursorPos = 0; render(); return;
+        case "tab":
+          if (node) updateSelectedDescription(state, editingValue);
+          editingField = null; editingValue = ""; cursorPos = 0; render(); return;
+        case "up": {
+          const lc = getLineCol(editingValue, cursorPos);
+          if (lc.line > 0) cursorPos = getPosFromLineCol(editingValue, lc.line - 1, lc.col);
+          else cursorPos = 0;
           render(); return;
         }
-        // Enter in title mode = confirm
-        if (node) updateSelectedTitle(state, editingValue);
-        editingField = null; editingValue = ""; render(); return;
-      case "escape":
-        // Escape = confirm and save (don't discard)
-        if (node) {
-          if (editingField === "title") updateSelectedTitle(state, editingValue);
-          else updateSelectedDescription(state, editingValue);
+        case "down": {
+          const lc2 = getLineCol(editingValue, cursorPos);
+          cursorPos = getPosFromLineCol(editingValue, lc2.line + 1, lc2.col);
+          render(); return;
         }
-        editingField = null; editingValue = ""; render(); return;
-      case "tab":
-        if (editingField === "title" && node) {
-          updateSelectedTitle(state, editingValue);
-          editingField = "description"; editingValue = node.description;
-        } else {
-          if (node && editingField === "description") updateSelectedDescription(state, editingValue);
-          editingField = null; editingValue = "";
-        }
-        render(); return;
-      case "backspace":
-        editingValue = editingValue.slice(0, -1);
-        render(); return;
-      default:
-        if (key.sequence && key.sequence.length === 1 && key.sequence >= " ") {
-          editingValue += key.sequence;
+        case "left":
+          if (cursorPos > 0) { cursorPos--; render(); } return;
+        case "right":
+          if (cursorPos < editingValue.length) { cursorPos++; render(); } return;
+        case "home":
+          cursorPos = 0; render(); return;
+        case "end":
+          cursorPos = editingValue.length; render(); return;
+        case "backspace":
+          if (cursorPos > 0) {
+            editingValue = editingValue.slice(0, cursorPos - 1) + editingValue.slice(cursorPos);
+            cursorPos--;
+            render();
+          }
+          return;
+        case "delete":
+          if (cursorPos < editingValue.length) {
+            editingValue = editingValue.slice(0, cursorPos) + editingValue.slice(cursorPos + 1);
+            render();
+          }
+          return;
+        case "return":
+        case "enter":
+          editingValue = editingValue.slice(0, cursorPos) + "\n" + editingValue.slice(cursorPos);
+          cursorPos++;
           render();
-        }
-        return;
+          return;
+        default:
+          if (key.sequence && key.sequence.length === 1 && key.sequence >= " ") {
+            editingValue = editingValue.slice(0, cursorPos) + key.sequence + editingValue.slice(cursorPos);
+            cursorPos++;
+            render();
+          }
+          return;
+      }
+    }
+
+    // Title: simple single-line editing
+    if (editingField === "title") {
+      switch (key.name) {
+        case "return":
+        case "enter":
+          if (node) updateSelectedTitle(state, editingValue);
+          editingField = null; editingValue = ""; render(); return;
+        case "escape":
+          if (node) updateSelectedTitle(state, editingValue);
+          editingField = null; editingValue = ""; render(); return;
+        case "tab":
+          if (node) { updateSelectedTitle(state, editingValue); editingField = "description"; editingValue = node.description; cursorPos = node.description.length; }
+          else { editingField = null; editingValue = ""; cursorPos = 0; }
+          render(); return;
+        case "backspace":
+          editingValue = editingValue.slice(0, -1); render(); return;
+        default:
+          if (key.sequence && key.sequence.length === 1 && key.sequence >= " ") {
+            editingValue += key.sequence; render();
+          }
+          return;
+      }
     }
   }
 
@@ -235,68 +315,45 @@ process.stdin.on("keypress", async (_str, key) => {
   switch (key.name) {
     case "q": {
       if (key.ctrl) { cleanup(); return; }
-      if (state.isDirty) {
-        state.error = "Unsaved changes. Press Ctrl+Q to force quit, or s to save first.";
-        render();
-      } else cleanup();
+      if (state.isDirty) { state.error = "Unsaved changes. Ctrl+Q to force quit."; render(); }
+      else cleanup();
       break;
     }
     case "up":    navigateUp(state); render(); break;
     case "down":  navigateDown(state); render(); break;
-
     case "tab": {
       if (!state.selectedId || state.isRunning) break;
       const n = state.project.nodes[state.selectedId];
-      if (n) { editingField = "title"; editingValue = n.title; render(); }
+      if (n) { editingField = "title"; editingValue = n.title; cursorPos = n.title.length; render(); }
       break;
     }
     case "i":
-      if (!state.isRunning) { addChildNode(state, "idea"); render(); }
-      break;
+      if (!state.isRunning) { addChildNode(state, "idea"); render(); } break;
     case "e":
-      if (!state.isRunning) { addChildNode(state, "experiment"); render(); }
-      break;
-
+      if (!state.isRunning) { addChildNode(state, "experiment"); render(); } break;
     case "r":
       if (!state.isRunning && state.selectedId) {
         const n = state.project.nodes[state.selectedId];
-        if (n?.type === "experiment") {
-          state.error = null; render();
-          await startExperiment(state, () => render());
-          render();
-        } else {
-          state.error = "Select an experiment node (○ gray) to run."; render();
-        }
+        if (n?.type === "experiment") { state.error = null; render(); await startExperiment(state, () => render()); render(); }
+        else { state.error = "Select an experiment node to run."; render(); }
       }
       break;
-
     case "s":
       if (key.ctrl) break;
-      if (state.filePath) {
-        save(state);
-      } else {
-        const p = cliFilePath ?? path.join(process.cwd(), "project.ist");
-        saveAs(state, p);
-        cliFilePath = p;
-        state.error = `Saved to ${p}`;
-      }
+      if (state.filePath) { save(state); }
+      else { const p = cliFilePath ?? path.join(process.cwd(), "project.ist"); saveAs(state, p); cliFilePath = p; state.error = `Saved to ${p}`; }
       render();
       break;
-
     case "delete":
     case "backspace":
       if (!state.isRunning && state.selectedId) {
         const n = state.project.nodes[state.selectedId];
-        if (n && state.selectedId !== state.project.rootNodeId) {
-          deleteSelected(state); render();
-        }
+        if (n && state.selectedId !== state.project.rootNodeId) { deleteSelected(state); render(); }
       }
       break;
-
     case "escape":
       selectNode(state, null); render();
       break;
-
     default:
       break;
   }

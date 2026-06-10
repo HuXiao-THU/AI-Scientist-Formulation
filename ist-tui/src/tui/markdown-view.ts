@@ -57,7 +57,7 @@ export function renderMarkdown(md: string, width: number): string[] {
     if (/^[\s]*[-*]\s/.test(raw)) {
       const text = raw.replace(/^[\s]*[-*]\s/, "");
       const rendered = renderStyled(text);
-      for (const l of wrapStyled(rendered, maxW, "    • ")) {
+      for (const l of wrapStyled(rendered, maxW, "    • ", "      ")) {
         lines.push(l);
       }
       continue;
@@ -67,7 +67,7 @@ export function renderMarkdown(md: string, width: number): string[] {
     if (/^[\s]*\d+[.)]\s/.test(raw)) {
       const text = raw.replace(/^[\s]*\d+[.)]\s/, "");
       const rendered = renderStyled(text);
-      for (const l of wrapStyled(rendered, maxW, "    • ")) {
+      for (const l of wrapStyled(rendered, maxW, "    • ", "      ")) {
         lines.push(l);
       }
       continue;
@@ -114,29 +114,33 @@ function renderStyled(text: string): string {
 
 /**
  * Word-wrap a string that may contain ANSI codes.
- * Splits on spaces, builds lines tracking visual width.
+ * @param text Styled text to wrap
+ * @param maxW Maximum visual width per line
+ * @param firstIndent Indent for the first line
+ * @param contIndent Indent for continuation lines (defaults to spaces matching firstIndent width)
  */
-function wrapStyled(text: string, maxW: number, indent: string): string[] {
+function wrapStyled(text: string, maxW: number, firstIndent: string, contIndent?: string): string[] {
+  const cont = contIndent ?? " ".repeat(visualWidth(stripAnsi(firstIndent)));
+  const firstVW = visualWidth(stripAnsi(firstIndent));
+  const contVW = visualWidth(stripAnsi(cont));
   const result: string[] = [];
-  // Split into tokens: words + spaces (preserving ANSI codes)
   const tokens = splitTokens(text);
-  let line = indent;
-  let lineVW = visualWidth(stripAnsi(indent));
+  let line = firstIndent;
+  let lineVW = firstVW;
 
   for (const token of tokens) {
     const tokenClean = stripAnsi(token);
     const tokenVW = visualWidth(tokenClean);
 
-    // If a single token is wider than maxW, we must force-break it
-    if (tokenVW > maxW && lineVW === visualWidth(stripAnsi(indent))) {
-      // Force-break the token across multiple lines
+    // Force-break single token wider than maxW
+    if (tokenVW > maxW && lineVW === firstVW) {
       let remaining = token;
       while (stripAnsi(remaining).length > 0) {
-        const available = maxW - lineVW;
-        if (available <= 0) {
+        const avail = maxW - lineVW;
+        if (avail <= 0) {
           result.push(line);
-          line = indent;
-          lineVW = visualWidth(stripAnsi(indent));
+          line = cont;
+          lineVW = contVW;
         }
         const chunk = clipToWidth(remaining, Math.max(1, maxW - lineVW));
         line += chunk;
@@ -144,44 +148,32 @@ function wrapStyled(text: string, maxW: number, indent: string): string[] {
         remaining = remaining.slice(chunk.length);
         if (stripAnsi(remaining).length > 0) {
           result.push(line);
-          line = indent;
-          lineVW = visualWidth(stripAnsi(indent));
+          line = cont;
+          lineVW = contVW;
         }
       }
       continue;
     }
 
-    // Check if space is a word separator (actual space, not leading spaces)
     const isSpace = tokenClean.trim() === "";
 
     if (isSpace) {
-      // Skip leading spaces on continuation lines
-      if (lineVW === visualWidth(stripAnsi(indent))) continue;
-      if (lineVW + tokenVW <= maxW) {
-        line += token;
-        lineVW += tokenVW;
-      }
+      if (lineVW === firstVW || lineVW === contVW) continue; // skip leading spaces
+      if (lineVW + tokenVW <= maxW) { line += token; lineVW += tokenVW; }
       continue;
     }
 
-    // Word token: check if it fits
     if (lineVW + tokenVW <= maxW) {
       line += token;
       lineVW += tokenVW;
     } else {
-      // New line needed
-      if (lineVW > visualWidth(stripAnsi(indent))) {
-        result.push(line);
-      }
-      line = indent + token;
-      lineVW = visualWidth(stripAnsi(indent)) + tokenVW;
+      if (lineVW > visualWidth(stripAnsi(line))) result.push(line);
+      line = cont + token;
+      lineVW = visualWidth(stripAnsi(cont)) + tokenVW;
     }
   }
 
-  if (line.length > indent.length || result.length === 0) {
-    result.push(line);
-  }
-
+  if (line.length > firstIndent.length || result.length === 0) result.push(line);
   return result;
 }
 

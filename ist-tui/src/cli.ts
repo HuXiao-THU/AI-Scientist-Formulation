@@ -171,7 +171,19 @@ function render(): void {
   const footer: string[] = [];
   if (editingField) {
     if (editingField === "title") {
-      footer.push(theme.accent(`  Editing title: `) + editingValue.slice(-(W - 25)));
+      // Show title with reverse-video cursor
+      const titleIndent = "  Editing title: ";
+      const maxVis = W - 25;
+      const pos = cursorPos;
+      let before = editingValue.slice(0, pos);
+      let at = editingValue[pos] || " ";
+      let after = editingValue.slice(pos + 1);
+      // Scroll: ensure cursor is visible in last ~maxVis chars
+      const visBefore = Math.max(0, before.length - maxVis + 5);
+      before = before.slice(visBefore);
+      if (visBefore > 0) before = "…" + before;
+      footer.push(theme.accent(titleIndent) + before + "\x1b[7m" + at + "\x1b[27m" + after);
+      footer.push(theme.muted("  [←→] move  [Enter/Esc] save  [Tab] switch to description"));
     } else {
       const lc = getLineCol(editingValue, cursorPos);
       footer.push(theme.accent(`  Editing description | Line ${lc.line + 1}, Col ${lc.col + 1}`) +
@@ -330,25 +342,44 @@ process.stdin.on("keypress", async (_str, key) => {
       }
     }
 
-    // Title: simple single-line editing
+    // Title: single-line editing with cursor
     if (editingField === "title") {
       switch (key.name) {
         case "return":
         case "enter":
           if (node) updateSelectedTitle(state, editingValue);
-          editingField = null; editingValue = ""; render(); return;
+          editingField = null; editingValue = ""; cursorPos = 0; render(); return;
         case "escape":
           if (node) updateSelectedTitle(state, editingValue);
-          editingField = null; editingValue = ""; render(); return;
+          editingField = null; editingValue = ""; cursorPos = 0; render(); return;
         case "tab":
-          if (node) { updateSelectedTitle(state, editingValue); editingField = "description"; editingValue = node.description; cursorPos = node.description.length; }
+          if (node) { updateSelectedTitle(state, editingValue); editingField = "description"; editingValue = node.description; cursorPos = node.description.length; descScroll = 0; }
           else { editingField = null; editingValue = ""; cursorPos = 0; }
           render(); return;
+        case "left":
+          if (cursorPos > 0) { cursorPos--; render(); } return;
+        case "right":
+          if (cursorPos < editingValue.length) { cursorPos++; render(); } return;
+        case "home":
+          cursorPos = 0; render(); return;
+        case "end":
+          cursorPos = editingValue.length; render(); return;
         case "backspace":
-          editingValue = editingValue.slice(0, -1); render(); return;
+          if (cursorPos > 0) {
+            editingValue = editingValue.slice(0, cursorPos - 1) + editingValue.slice(cursorPos);
+            cursorPos--; render();
+          }
+          return;
+        case "delete":
+          if (cursorPos < editingValue.length) {
+            editingValue = editingValue.slice(0, cursorPos) + editingValue.slice(cursorPos + 1);
+            render();
+          }
+          return;
         default:
           if (key.sequence && key.sequence.length === 1 && key.sequence >= " ") {
-            editingValue += key.sequence; render();
+            editingValue = editingValue.slice(0, cursorPos) + key.sequence + editingValue.slice(cursorPos);
+            cursorPos++; render();
           }
           return;
       }

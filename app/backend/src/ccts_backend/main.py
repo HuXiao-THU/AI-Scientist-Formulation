@@ -7,11 +7,21 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from .domain.agent import propose_next
 from .domain.ccts import compute_context_budget, is_feasible
-from .schemas import CreateRunRequest, RunDetailResponse, RunListItem, StepResponse
+from .domain.experiments import ExperimentConfig, run_experiment
+from .domain.report import build_report
+from .schemas import (
+    AgentStepResponse,
+    CreateRunRequest,
+    ReportResponse,
+    RunDetailResponse,
+    RunListItem,
+    StepResponse,
+)
 from .store import STORE
 
-app = FastAPI(title="CCTS Phase 1 MVP API", version="0.1.0")
+app = FastAPI(title="CCTS Research Agent API", version="0.2.0")
 
 # Configure CORS
 app.add_middleware(
@@ -23,6 +33,20 @@ app.add_middleware(
 )
 
 
+def _event(run_id: str, node: Any, event_type: str = "node.created") -> None:
+    STORE.append_event(
+        run_id,
+        {
+            "type": event_type,
+            "run_id": run_id,
+            "node_id": node.id,
+            "depth": node.depth,
+            "status": node.status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -30,7 +54,27 @@ def health() -> dict[str, str]:
 
 @app.post("/api/runs", response_model=RunDetailResponse, status_code=201)
 def create_run(payload: CreateRunRequest) -> RunDetailResponse:
-    run = STORE.create_run(payload)
+    if payload.mode == "real":
+        run = STORE.create_run(payload, with_root=False)
+        baseline_config = ExperimentConfig()  # historical-average climatology
+        result = run_experiment(baseline_config)
+        root = STORE.add_root_node(
+            run.id,
+            status="success",
+            metric_value=result.mae,
+            rmse=result.rmse,
+            duration_s=result.duration_s,
+            config=baseline_config.to_dict(),
+            hypothesis=(
+                "Establish a climatology baseline: average speed per time-of-day "
+                "and weekend flag over the training weeks."
+            ),
+            action="baseline",
+        )
+        if root is not None:
+            _event(run.id, root, "run.created")
+    else:
+        run = STORE.create_run(payload)
     detail = STORE.get_run_detail(run.id)
     if detail is None:
         raise HTTPException(status_code=500, detail="run creation failed")
@@ -48,6 +92,122 @@ def get_run_detail(run_id: str) -> RunDetailResponse:
     if detail is None:
         raise HTTPException(status_code=404, detail="run not found")
     return detail
+
+
+@app.get("/api/runs/{run_id}/report", response_model=ReportResponse)
+def get_run_report(run_id: str) -> ReportResponse:
+    run = STORE.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return ReportResponse(run_id=run_id, markdown=build_report(run))
+
+
+@app.post("/api/runs/{run_id}/steps/agent", response_model=AgentStepResponse)
+def agent_step(run_id: str) -> AgentStepResponse:
+    """Let the research agent run one real experiment (propose -> run -> judge)."""
+    run = STORE.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    if run.mode != "real":
+        raise HTTPException(status_code=400, detail="agent steps require a real-mode run")
+    if run.status != "running":
+        return AgentStepResponse(
+            run_id=run_id,
+            run_status=run.status,  # type: ignore[arg-type]
+            reason=f"run already {run.status}",
+            best_mae=run.best_mae,
+            predicted_max_depth=run.predicted_depth,
+            step_index=run.max_step_index,
+        )
+
+    next_step = run.max_step_index + 1
+    c_hist, _ = compute_context_budget(
+        total_context=run.context_window,
+        static_overhead=run.static_cost,
+        mean_information_gain=run.delta_i,
+        alpha=run.alpha,
+        depth=next_step,
+    )
+    if not is_feasible(
+        total_context=run.context_window,
+        static_overhead=run.static_cost,
+        history_context=c_hist,
+        task_demand=run.task_cost,
+    ):
+        STORE.mark_failed(run_id)
+        return AgentStepResponse(
+            run_id=run_id,
+            run_status="failed",
+            reason="context budget exhausted (c_work < D)",
+            best_mae=run.best_mae,
+            predicted_max_depth=run.predicted_depth,
+            step_index=run.max_step_index,
+        )
+
+    rng = random.Random(f"{run_id}:{next_step}")
+    proposal = propose_next(list(run.nodes), rng)
+    if proposal is None:
+        STORE.mark_completed(run_id)
+        return AgentStepResponse(
+            run_id=run_id,
+            run_status="completed",
+            reason="experiment design space exhausted",
+            best_mae=run.best_mae,
+            predicted_max_depth=run.predicted_depth,
+            step_index=run.max_step_index,
+        )
+
+    parent = next((n for n in run.nodes if n.id == proposal.parent_id), None)
+    try:
+        result = run_experiment(proposal.config)
+        improved = parent is not None and parent.metric_value is not None and result.mae < parent.metric_value
+        status = "success" if improved else "fail"
+        node = STORE.append_node(
+            run_id=run_id,
+            depth=(parent.depth + 1) if parent else 1,
+            status=status,
+            metric_value=result.mae,
+            parent_id=proposal.parent_id,
+            step_index=next_step,
+            rmse=result.rmse,
+            duration_s=result.duration_s,
+            action=proposal.action,
+            hypothesis=proposal.hypothesis,
+            config=proposal.config.to_dict(),
+        )
+        reason = None
+        if result.mae <= run.target_mae:
+            STORE.mark_completed(run_id)
+            reason = f"target MAE {run.target_mae:.2f} reached"
+    except Exception as exc:  # experiment crashed: record and keep searching
+        node = STORE.append_node(
+            run_id=run_id,
+            depth=(parent.depth + 1) if parent else 1,
+            status="error",
+            metric_value=None,
+            parent_id=proposal.parent_id,
+            step_index=next_step,
+            action=proposal.action,
+            hypothesis=proposal.hypothesis,
+            config=proposal.config.to_dict(),
+        )
+        reason = f"experiment error: {exc}"
+
+    if node is None:
+        raise HTTPException(status_code=500, detail="node append failed")
+    _event(run_id, node)
+
+    refreshed = STORE.get_run(run_id)
+    assert refreshed is not None
+    return AgentStepResponse(
+        run_id=run_id,
+        run_status=refreshed.status,  # type: ignore[arg-type]
+        reason=reason,
+        node=node.to_schema(),
+        best_mae=refreshed.best_mae,
+        predicted_max_depth=refreshed.predicted_depth,
+        step_index=next_step,
+    )
 
 
 @app.post("/api/runs/{run_id}/steps/mock", response_model=StepResponse)
@@ -89,17 +249,7 @@ def mock_step(run_id: str) -> StepResponse:
     if status == "success":
         STORE.mark_completed(run_id)
 
-    STORE.append_event(
-        run_id,
-        {
-            "type": "node.created",
-            "run_id": run_id,
-            "node_id": node.id,
-            "depth": node.depth,
-            "status": node.status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+    _event(run_id, node)
 
     return StepResponse(
         run_id=run_id,
